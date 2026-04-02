@@ -25,6 +25,8 @@ def _ensure_api_keys():
         os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
     if settings.deepseek_api_key:
         os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
+    if settings.minimax_api_key:
+        os.environ.setdefault("MINIMAX_API_KEY", settings.minimax_api_key)
 
 
 _ensure_api_keys()
@@ -50,6 +52,11 @@ def _resolve_model(
         # 确保模型名有 openai/ 前缀（LiteLLM 的 OpenAI 兼容模式）
         clean_name = model.split("/", 1)[-1] if "/" in model else model
         return f"openai/{clean_name}", _DASHSCOPE_API_BASE, settings.dashscope_api_key
+
+    # MiniMax 模型 → OpenAI 兼容端点
+    if model_lower.startswith("minimax/") and settings.minimax_api_key:
+        clean_name = model.split("/", 1)[-1] if "/" in model else model
+        return f"openai/{clean_name}", settings.minimax_api_base, settings.minimax_api_key
 
     return model, api_base, api_key
 

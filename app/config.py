@@ -26,6 +26,11 @@ class Settings:
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "").strip()
     dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "").strip()
 
+    # ---------- MiniMax ----------
+    minimax_api_key: str = os.getenv("MINIMAX_API_KEY", "").strip()
+    minimax_api_base: str = os.getenv("MINIMAX_API_BASE", "https://api.minimax.chat/v1").strip()
+    minimax_model_name: str = os.getenv("MINIMAX_MODEL_NAME", "abab6.5s-chat").strip()
+
     # ---------- 默认模型 ----------
     default_llm_model: str = os.getenv("DEFAULT_LLM_MODEL", "gemini/gemini-2.0-flash").strip()
 
@@ -46,6 +51,7 @@ class Settings:
             or self.openai_api_key
             or self.deepseek_api_key
             or self.dashscope_api_key
+            or self.minimax_api_key
         )
 
 
