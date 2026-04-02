@@ -2,10 +2,10 @@ import Phaser from 'phaser';
 import { EventBus } from '../../shared/events/EventBus';
 import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 
-// LimeZu 32x64 frames: 56 cols x 20 rows
+// 当前角色素材按 32x64 切分后为 84 列 x 30 行。
 // Row 1: idle loop (24 frames: down 0-5, right 6-11, up 12-17, left 18-23)
 // Row 2: walk (same layout)
-const SPRITE_COLS = 56;
+const SPRITE_COLS = 84;
 const BASE_MAP_WIDTH = 1280;
 const BASE_MAP_HEIGHT = 960;
 const CURRENT_MAP_WIDTH = 960;
@@ -607,7 +607,7 @@ export class OfficeScene extends Phaser.Scene {
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;
       const pos = room.spots[spotIndex];
 
-      const sprite = this.add.sprite(0, 0, spawn.spriteKey);
+      const sprite = this.add.sprite(0, 0, spawn.spriteKey, SPRITE_COLS);
       sprite.play(`${spawn.spriteKey}-idle-down`);
 
       const nameTag = this.add.text(0, -42, spawn.name, {
