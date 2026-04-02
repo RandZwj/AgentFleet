@@ -252,14 +252,11 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
-    // 2. 房间名称标签
-    this.createRoomLabels();
-
-    // 3. 角色
+    // 2. 角色
     this.createAnimations();
     this.createAgents();
 
-    // 4. 摄像机 — 自适应缩放 + 拖拽/滚轮平移
+    // 3. 摄像机 — 自适应缩放 + 拖拽/滚轮平移
     const mapWidth = this.map.widthInPixels;
     const mapHeight = this.map.heightInPixels;
     const chatBoxWidth = 520; // ChatBox 占据右侧宽度（含 Agent 列表侧栏）
@@ -306,14 +303,14 @@ export class OfficeScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
 
-    // 5. 监听聊天事件驱动 Agent 移动 & 对话气泡
+    // 4. 监听聊天事件驱动 Agent 移动 & 对话气泡
     EventBus.on('chat:agent-move', this.onChatAgentMove, this);
     EventBus.on('chat:agent-bubble', this.onAgentBubble, this);
 
-    // 6. 监听新 Agent 创建事件，动态添加精灵
+    // 5. 监听新 Agent 创建事件，动态添加精灵
     EventBus.on('agent:spawned', this.onAgentSpawned, this);
 
-    // 7. 监听 Agent 删除事件，移除精灵
+    // 6. 监听 Agent 删除事件，移除精灵
     EventBus.on('agent:despawned', this.onAgentDespawned, this);
 
     EventBus.emit('scene:ready');
@@ -414,26 +411,6 @@ export class OfficeScene extends Phaser.Scene {
       homeRoom,
       currentRoom: homeRoom,
     });
-  }
-
-  // ============================================================
-  // 房间名称标签
-  // ============================================================
-  private createRoomLabels() {
-    for (const roomId of Object.keys(ROOMS)) {
-      const room = getScaledRoom(roomId);
-      const label = this.add.text(room.labelPos.x, room.labelPos.y, room.label, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#ffd700',
-        stroke: '#000000',
-        strokeThickness: 4,
-        align: 'center',
-      });
-      label.setOrigin(0.5);
-      label.setAlpha(0.85);
-      label.setDepth(10000);
-    }
   }
 
   private onAgentDespawned(data: { slug: string }) {
