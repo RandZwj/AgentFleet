@@ -566,11 +566,12 @@ export class OfficeScene extends Phaser.Scene {
     DIRECTION_FRAME_LAYOUT.forEach(({ dir, colStart }) => {
       const idleKey = `${spriteKey}-idle-${dir}`;
       if (!this.anims.exists(idleKey)) {
-        const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-        for (let i = 0; i < FRAMES_PER_DIRECTION; i++) {
-          frames.push({ key: spriteKey, frame: getFrameIndex(IDLE_ROW, colStart + i) });
-        }
-        this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
+        this.anims.create({
+          key: idleKey,
+          frames: [{ key: spriteKey, frame: getFrameIndex(IDLE_ROW, colStart) }],
+          frameRate: 1,
+          repeat: 0,
+        });
       }
 
       const walkKey = `${spriteKey}-walk-${dir}`;
