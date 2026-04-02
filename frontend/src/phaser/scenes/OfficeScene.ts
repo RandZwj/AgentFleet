@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { EventBus } from '../../shared/events/EventBus';
 import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 
-// 当前角色素材按 32x64 切分后为 84 列 x 30 行。
-// 第 1 行是 idle，第 2 行是 walk；这里按 0-based 行号计算 frame。
+// 当前角色素材按 32x64 切分后为 84 列 x 31 行。
+// 经过核对，这套图集用于办公室角色的待机/行走动画位于第 2、3 行（0-based 为 1、2）。
 const SPRITE_COLS = 84;
-const IDLE_ROW = 0;
-const WALK_ROW = 1;
+const FRAMES_PER_DIRECTION = 6;
+const IDLE_ROW = 1;
+const WALK_ROW = 2;
 const BASE_MAP_WIDTH = 1280;
 const BASE_MAP_HEIGHT = 960;
 const CURRENT_MAP_WIDTH = 960;
@@ -175,6 +176,17 @@ const ROOM_CORRIDOR: Record<string, string> = {
 
 type Direction = 'down' | 'right' | 'up' | 'left';
 
+const DIRECTION_FRAME_LAYOUT: { dir: Direction; colStart: number }[] = [
+  { dir: 'down', colStart: 0 },
+  { dir: 'right', colStart: 6 },
+  { dir: 'up', colStart: 12 },
+  { dir: 'left', colStart: 18 },
+];
+
+function getFrameIndex(row: number, col: number): number {
+  return row * SPRITE_COLS + col;
+}
+
 function scalePoint(point: { x: number; y: number }): { x: number; y: number } {
   return {
     x: Math.round(point.x * SCALE_X),
@@ -219,6 +231,7 @@ interface AgentCharacter {
   spriteKey: string;
   color: number;
   isMoving: boolean;
+  facing: Direction;
   homeRoom: string;
   currentRoom: string;
   bubbleContainer?: Phaser.GameObjects.Container;
@@ -343,31 +356,7 @@ export class OfficeScene extends Phaser.Scene {
     const homeRoom = data.roomId || 'workspace';
     const color = cssColorToHex(data.color);
 
-    // 创建动画
-    const dirs: { dir: Direction; colStart: number }[] = [
-      { dir: 'down', colStart: 0 },
-      { dir: 'right', colStart: 6 },
-      { dir: 'up', colStart: 12 },
-      { dir: 'left', colStart: 18 },
-    ];
-    dirs.forEach(({ dir, colStart }) => {
-      const idleKey = `${spriteKey}-idle-${dir}`;
-      if (!this.anims.exists(idleKey)) {
-        const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-        for (let i = 0; i < 6; i++) {
-          frames.push({ key: spriteKey, frame: IDLE_ROW * SPRITE_COLS + colStart + i });
-        }
-        this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
-      }
-      const walkKey = `${spriteKey}-walk-${dir}`;
-      if (!this.anims.exists(walkKey)) {
-        const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-        for (let i = 0; i < 6; i++) {
-          frames.push({ key: spriteKey, frame: WALK_ROW * SPRITE_COLS + colStart + i });
-        }
-        this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
-      }
-    });
+    this.createAnimationsForSprite(spriteKey);
 
     // 在目标房间分配站位
     const room = getScaledRoom(homeRoom);
@@ -376,7 +365,7 @@ export class OfficeScene extends Phaser.Scene {
     const pos = room.spots[spotIndex];
 
     // 创建精灵
-    const sprite = this.add.sprite(0, 0, spriteKey);
+    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
     sprite.play(`${spriteKey}-idle-down`);
 
     const nameTag = this.add.text(0, -42, data.displayName, {
@@ -409,6 +398,7 @@ export class OfficeScene extends Phaser.Scene {
       spriteKey,
       color,
       isMoving: false,
+      facing: 'down',
       homeRoom,
       currentRoom: homeRoom,
     });
@@ -530,7 +520,7 @@ export class OfficeScene extends Phaser.Scene {
   private moveAlongPath(agent: AgentCharacter, path: { x: number; y: number }[], index: number) {
     if (index >= path.length) {
       agent.isMoving = false;
-      agent.sprite.play(`${agent.spriteKey}-idle-down`);
+      this.playAgentAnimation(agent, 'idle');
       return;
     }
 
@@ -545,7 +535,8 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const dir = this.getDirection(dx, dy);
-    agent.sprite.play(`${agent.spriteKey}-walk-${dir}`);
+    agent.facing = dir;
+    this.playAgentAnimation(agent, 'walk', dir);
     agent.isMoving = true;
 
     const duration = (distance / 80) * 1000; // 80px/s
@@ -567,33 +558,29 @@ export class OfficeScene extends Phaser.Scene {
 
   private createAnimations() {
     this.agentSpawns.forEach((spawn) => {
-      const key = spawn.spriteKey;
-      const dirs: { dir: Direction; colStart: number }[] = [
-        { dir: 'down', colStart: 0 },
-        { dir: 'right', colStart: 6 },
-        { dir: 'up', colStart: 12 },
-        { dir: 'left', colStart: 18 },
-      ];
+      this.createAnimationsForSprite(spawn.spriteKey);
+    });
+  }
 
-      dirs.forEach(({ dir, colStart }) => {
-        const idleKey = `${key}-idle-${dir}`;
-        if (!this.anims.exists(idleKey)) {
-          const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-          for (let i = 0; i < 6; i++) {
-            frames.push({ key, frame: IDLE_ROW * SPRITE_COLS + colStart + i });
-          }
-          this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
+  private createAnimationsForSprite(spriteKey: string) {
+    DIRECTION_FRAME_LAYOUT.forEach(({ dir, colStart }) => {
+      const idleKey = `${spriteKey}-idle-${dir}`;
+      if (!this.anims.exists(idleKey)) {
+        const frames: Phaser.Types.Animations.AnimationFrame[] = [];
+        for (let i = 0; i < FRAMES_PER_DIRECTION; i++) {
+          frames.push({ key: spriteKey, frame: getFrameIndex(IDLE_ROW, colStart + i) });
         }
+        this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
+      }
 
-        const walkKey = `${key}-walk-${dir}`;
-        if (!this.anims.exists(walkKey)) {
-          const frames: Phaser.Types.Animations.AnimationFrame[] = [];
-          for (let i = 0; i < 6; i++) {
-            frames.push({ key, frame: WALK_ROW * SPRITE_COLS + colStart + i });
-          }
-          this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
+      const walkKey = `${spriteKey}-walk-${dir}`;
+      if (!this.anims.exists(walkKey)) {
+        const frames: Phaser.Types.Animations.AnimationFrame[] = [];
+        for (let i = 0; i < FRAMES_PER_DIRECTION; i++) {
+          frames.push({ key: spriteKey, frame: getFrameIndex(WALK_ROW, colStart + i) });
         }
-      });
+        this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
+      }
     });
   }
 
@@ -608,7 +595,7 @@ export class OfficeScene extends Phaser.Scene {
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;
       const pos = room.spots[spotIndex];
 
-      const sprite = this.add.sprite(0, 0, spawn.spriteKey, IDLE_ROW * SPRITE_COLS);
+      const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
       sprite.play(`${spawn.spriteKey}-idle-down`);
 
       const nameTag = this.add.text(0, -42, spawn.name, {
@@ -641,10 +628,18 @@ export class OfficeScene extends Phaser.Scene {
         spriteKey: spawn.spriteKey,
         color: spawn.color,
         isMoving: false,
+        facing: 'down',
         homeRoom: spawn.homeRoom,
         currentRoom: spawn.homeRoom,
       });
     });
+  }
+
+  private playAgentAnimation(agent: AgentCharacter, state: 'idle' | 'walk', dir: Direction = agent.facing) {
+    const key = `${agent.spriteKey}-${state}-${dir}`;
+    if (agent.sprite.anims.currentAnim?.key !== key) {
+      agent.sprite.play(key);
+    }
   }
 
   private getDirection(dx: number, dy: number): Direction {
