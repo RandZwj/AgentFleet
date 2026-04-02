@@ -36,6 +36,9 @@ scripts/seed_mock_data.py
 scripts/training_data_sample.jsonl
 scripts/local_model_setup.py
 
+frontend/public/assets/tilemaps/moderninteriors-win/*
+frontend/public/assets/tilemaps/Modern_Office_Revamped_v1.2/*
+
 # Playwright MCP
 .playwright-mcp/
 
