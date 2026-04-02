@@ -23,7 +23,4 @@ RUN find /usr -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true \
 
 EXPOSE 8001
 
-# 启动时安装缺失依赖并启动服务
-COPY startup.sh /startup.sh
-RUN chmod +x /startup.sh
-CMD ["/startup.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
