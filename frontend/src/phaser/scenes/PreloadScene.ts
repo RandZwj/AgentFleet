@@ -1,5 +1,44 @@
 import Phaser from 'phaser';
 
+const TILESET_IMAGES = [
+  {
+    key: 'Room_Builder_Office_32x32',
+    path: 'assets/tilemaps/Modern_Office_Revamped_v1.2/1_Room_Builder_Office/Room_Builder_Office_32x32.png',
+  },
+  {
+    key: 'Modern_Office_32x32',
+    path: 'assets/tilemaps/Modern_Office_Revamped_v1.2/Modern_Office_32x32.png',
+  },
+  {
+    key: 'int_Basement_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/14_Basement_32x32.png',
+  },
+  {
+    key: 'int_Bathroom_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/3_Bathroom_32x32.png',
+  },
+  {
+    key: 'int_Classroom_and_library_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/5_Classroom_and_library_32x32.png',
+  },
+  {
+    key: 'int_Generic_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/1_Generic_32x32.png',
+  },
+  {
+    key: 'int_Kitchen_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/12_Kitchen_32x32.png',
+  },
+  {
+    key: 'int_Hospital_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/19_Hospital_32x32.png',
+  },
+  {
+    key: 'int_Grocery_store_32x32',
+    path: 'assets/tilemaps/moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/16_Grocery_store_32x32.png',
+  },
+];
+
 export class PreloadScene extends Phaser.Scene {
   private progressBar!: Phaser.GameObjects.Graphics;
   private progressBox!: Phaser.GameObjects.Graphics;
@@ -39,45 +78,15 @@ export class PreloadScene extends Phaser.Scene {
       this.loadingText.destroy();
     });
 
-    // 地图 JSON
-    this.load.tilemapTiledJSON('office-map', 'assets/tilemaps/office.json');
+    // 加载与当前精简 tileset 方案匹配的办公室地图。
+    this.load.tilemapTiledJSON('office-map', 'assets/tilemaps/references/office-agent.json');
 
-    // tileset 用 spritesheet 加载（object layer 需要 frame index）
-    this.load.spritesheet('tiles_wall', 'assets/tilemaps/FloorAndGround.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-    this.load.spritesheet('chairs', 'assets/tilemaps/chair.png', {
-      frameWidth: 32,
-      frameHeight: 64,
-    });
-    this.load.spritesheet('computers', 'assets/tilemaps/computer.png', {
-      frameWidth: 96,
-      frameHeight: 64,
-    });
-    this.load.spritesheet('whiteboards', 'assets/tilemaps/whiteboard.png', {
-      frameWidth: 64,
-      frameHeight: 64,
-    });
-    this.load.spritesheet('vendingmachines', 'assets/tilemaps/vendingmachine.png', {
-      frameWidth: 48,
-      frameHeight: 72,
-    });
-    this.load.spritesheet('office', 'assets/tilemaps/Modern_Office_Black_Shadow.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-    this.load.spritesheet('basement', 'assets/tilemaps/Basement.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-    this.load.spritesheet('generic', 'assets/tilemaps/Generic.png', {
-      frameWidth: 32,
-      frameHeight: 32,
+    TILESET_IMAGES.forEach((tileset) => {
+      this.load.image(tileset.key, tileset.path);
     });
 
-    // 20 个角色 spritesheet（32x64 帧 — 每个角色 2 格高）
-    for (let i = 1; i <= 20; i++) {
+    // 当前仓库只保留 char_07 ~ char_20。
+    for (let i = 7; i <= 20; i++) {
       const key = `char_${String(i).padStart(2, '0')}`;
       this.load.spritesheet(key, `assets/sprites/characters/${key}.png`, {
         frameWidth: 32,

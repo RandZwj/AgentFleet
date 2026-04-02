@@ -17,23 +17,23 @@ export interface AgentRegistryEntry {
 }
 
 /** sprite 映射：slug → 精灵 key。后端不管前端素材，由前端维护。 */
-const SPRITE_MAP: Record<string, string> = {
-  dispatcher: 'char_01',
-  copywriter: 'char_02',
-  video_editor: 'char_03',
-  content_ops: 'char_04',
-  art_designer: 'char_05',
-};
-let nextSpriteIndex = 6; // 用户自定义 agent 从 char_06 开始
+const AVAILABLE_SPRITES = Array.from({ length: 14 }, (_unused, index) => {
+  return `char_${String(index + 7).padStart(2, '0')}`;
+});
 
-/** 最大可用精灵数（素材包提供 20 个预制角色） */
-const MAX_SPRITES = 20;
+const SPRITE_MAP: Record<string, string> = {
+  dispatcher: 'char_07',
+  copywriter: 'char_08',
+  video_editor: 'char_09',
+  content_ops: 'char_10',
+  art_designer: 'char_11',
+};
+let nextSpriteIndex = 5; // 用户自定义 agent 从剩余可用精灵开始分配
 
 export function getSpriteKey(slug: string): string {
   if (SPRITE_MAP[slug]) return SPRITE_MAP[slug];
-  // 动态分配（超出上限时循环复用）
-  const idx = nextSpriteIndex <= MAX_SPRITES ? nextSpriteIndex : ((nextSpriteIndex - 1) % MAX_SPRITES) + 1;
-  const key = `char_${String(idx).padStart(2, '0')}`;
+  // 仅在现有素材范围内循环复用，避免请求缺失的 char_01 ~ char_06。
+  const key = AVAILABLE_SPRITES[nextSpriteIndex % AVAILABLE_SPRITES.length];
   SPRITE_MAP[slug] = key;
   nextSpriteIndex++;
   return key;

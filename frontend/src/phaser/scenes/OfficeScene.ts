@@ -6,6 +6,33 @@ import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 // Row 1: idle loop (24 frames: down 0-5, right 6-11, up 12-17, left 18-23)
 // Row 2: walk (same layout)
 const SPRITE_COLS = 56;
+const BASE_MAP_WIDTH = 1280;
+const BASE_MAP_HEIGHT = 960;
+const CURRENT_MAP_WIDTH = 960;
+const CURRENT_MAP_HEIGHT = 640;
+const SCALE_X = CURRENT_MAP_WIDTH / BASE_MAP_WIDTH;
+const SCALE_Y = CURRENT_MAP_HEIGHT / BASE_MAP_HEIGHT;
+
+const MAP_TILESET_NAMES = [
+  'Room_Builder_Office_32x32',
+  'Modern_Office_32x32',
+  'int_Basement_32x32',
+  'int_Bathroom_32x32',
+  'int_Classroom_and_library_32x32',
+  'int_Generic_32x32',
+  'int_Kitchen_32x32',
+  'int_Hospital_32x32',
+  'int_Grocery_store_32x32',
+];
+
+const VISIBLE_TILE_LAYERS = [
+  'Floor Visuals',
+  'Wall Visuals',
+  'Furniture Visuals L1',
+  'Furniture Visuals L2',
+  'Furniture Visuals L3',
+  'Furniture Visuals L4',
+];
 
 // ============================================================
 // 房间定义 — 基于实际地图墙体分析
@@ -147,6 +174,23 @@ const ROOM_CORRIDOR: Record<string, string> = {
 
 type Direction = 'down' | 'right' | 'up' | 'left';
 
+function scalePoint(point: { x: number; y: number }): { x: number; y: number } {
+  return {
+    x: Math.round(point.x * SCALE_X),
+    y: Math.round(point.y * SCALE_Y),
+  };
+}
+
+function getScaledRoom(roomId: string) {
+  const room = ROOMS[roomId] || ROOMS.workspace;
+  return {
+    ...room,
+    labelPos: scalePoint(room.labelPos),
+    entry: scalePoint(room.entry),
+    spots: room.spots.map(scalePoint),
+  };
+}
+
 // ============================================================
 // Agent 配置 — 从 agentRegistry 动态构建
 // ============================================================
@@ -194,32 +238,28 @@ export class OfficeScene extends Phaser.Scene {
     this.agentSpawns = buildAgentSpawns();
     this.buildCorridorGraph();
 
-    // 1. 地图
+    // 1. 地图：按 office.json 中的 tileset / tilelayer 直接渲染，
+    // 暂时跳过 blocks_1.png 对应的逻辑层。
     this.map = this.make.tilemap({ key: 'office-map' });
-    const floorTS = this.map.addTilesetImage('FloorAndGround', 'tiles_wall')!;
-    const groundLayer = this.map.createLayer('Ground', floorTS);
-    if (groundLayer) groundLayer.setDepth(0);
+    const tilesets = MAP_TILESET_NAMES
+      .map((tilesetName) => this.map.addTilesetImage(tilesetName, tilesetName))
+      .filter((tileset): tileset is Phaser.Tilemaps.Tileset => Boolean(tileset));
 
-    // 2. Object layers
-    this.addGroupFromTiled('Wall', 'tiles_wall', 'FloorAndGround');
-    this.addGroupFromTiled('Objects', 'office', 'Modern_Office_Black_Shadow');
-    this.addGroupFromTiled('ObjectsOnCollide', 'office', 'Modern_Office_Black_Shadow');
-    this.addGroupFromTiled('GenericObjects', 'generic', 'Generic');
-    this.addGroupFromTiled('GenericObjectsOnCollide', 'generic', 'Generic');
-    this.addGroupFromTiled('Basement', 'basement', 'Basement');
-    this.addGroupFromTiled('Chair', 'chairs', 'chair');
-    this.addGroupFromTiled('Computer', 'computers', 'computer');
-    this.addGroupFromTiled('Whiteboard', 'whiteboards', 'whiteboard');
-    this.addGroupFromTiled('VendingMachine', 'vendingmachines', 'vendingmachine');
+    VISIBLE_TILE_LAYERS.forEach((layerName, index) => {
+      const layer = this.map.createLayer(layerName, tilesets, 0, 0);
+      if (layer) {
+        layer.setDepth(index);
+      }
+    });
 
-    // 3. 房间名称标签
+    // 2. 房间名称标签
     this.createRoomLabels();
 
-    // 4. 角色
+    // 3. 角色
     this.createAnimations();
     this.createAgents();
 
-    // 5. 摄像机 — 自适应缩放 + 拖拽/滚轮平移
+    // 4. 摄像机 — 自适应缩放 + 拖拽/滚轮平移
     const mapWidth = this.map.widthInPixels;
     const mapHeight = this.map.heightInPixels;
     const chatBoxWidth = 520; // ChatBox 占据右侧宽度（含 Agent 列表侧栏）
@@ -266,14 +306,14 @@ export class OfficeScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
 
-    // 6. 监听聊天事件驱动 Agent 移动 & 对话气泡
+    // 5. 监听聊天事件驱动 Agent 移动 & 对话气泡
     EventBus.on('chat:agent-move', this.onChatAgentMove, this);
     EventBus.on('chat:agent-bubble', this.onAgentBubble, this);
 
-    // 7. 监听新 Agent 创建事件，动态添加精灵
+    // 6. 监听新 Agent 创建事件，动态添加精灵
     EventBus.on('agent:spawned', this.onAgentSpawned, this);
 
-    // 8. 监听 Agent 删除事件，移除精灵
+    // 7. 监听 Agent 删除事件，移除精灵
     EventBus.on('agent:despawned', this.onAgentDespawned, this);
 
     EventBus.emit('scene:ready');
@@ -332,7 +372,7 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     // 在目标房间分配站位
-    const room = ROOMS[homeRoom] || ROOMS.workspace;
+    const room = getScaledRoom(homeRoom);
     const usedCount = this.agents.filter((a) => a.currentRoom === homeRoom).length;
     const spotIndex = usedCount % room.spots.length;
     const pos = room.spots[spotIndex];
@@ -380,7 +420,8 @@ export class OfficeScene extends Phaser.Scene {
   // 房间名称标签
   // ============================================================
   private createRoomLabels() {
-    for (const [_key, room] of Object.entries(ROOMS)) {
+    for (const roomId of Object.keys(ROOMS)) {
+      const room = getScaledRoom(roomId);
       const label = this.add.text(room.labelPos.x, room.labelPos.y, room.label, {
         fontFamily: 'monospace',
         fontSize: '14px',
@@ -444,7 +485,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private getNodePos(nodeId: string): { x: number; y: number } {
     const node = CORRIDOR_NODES.find((n) => n.id === nodeId)!;
-    return { x: node.x, y: node.y };
+    return scalePoint({ x: node.x, y: node.y });
   }
 
   // ============================================================
@@ -454,8 +495,7 @@ export class OfficeScene extends Phaser.Scene {
     const agent = this.agents.find((a) => a.agentId === agentId);
     if (!agent || agent.isMoving) return;
 
-    const targetRoom = ROOMS[roomId];
-    if (!targetRoom) return;
+    const targetRoom = getScaledRoom(roomId);
 
     const fromRoom = agent.currentRoom;
     const fullPath: { x: number; y: number }[] = [];
@@ -473,7 +513,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!fromCorridorId || !toCorridorId) return;
 
       // 1) 先走到当前房间的门口（不会穿墙）
-      const fromRoomData = ROOMS[fromRoom];
+      const fromRoomData = getScaledRoom(fromRoom);
       if (fromRoomData) {
         fullPath.push(fromRoomData.entry);
       }
@@ -547,35 +587,6 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
-  // ============================================================
-  // 渲染
-  // ============================================================
-  private addGroupFromTiled(objectLayerName: string, key: string, tilesetName: string) {
-    const objectLayer = this.map.getObjectLayer(objectLayerName);
-    if (!objectLayer) return;
-
-    const tileset = this.map.getTileset(tilesetName);
-    if (!tileset) return;
-
-    objectLayer.objects.forEach((object) => {
-      if (object.gid === undefined) return;
-
-      const FLIPPED_H = 0x80000000;
-      const FLIPPED_V = 0x40000000;
-      const FLIPPED_D = 0x20000000;
-      const cleanGid = object.gid & ~(FLIPPED_H | FLIPPED_V | FLIPPED_D);
-      const flipH = (object.gid & FLIPPED_H) !== 0;
-
-      const frameIndex = cleanGid - tileset.firstgid;
-      const actualX = (object.x || 0) + (object.width || 0) * 0.5;
-      const actualY = (object.y || 0) - (object.height || 0) * 0.5;
-
-      const sprite = this.add.sprite(actualX, actualY, key, frameIndex);
-      sprite.setDepth(actualY);
-      if (flipH) sprite.setFlipX(true);
-    });
-  }
-
   private createAnimations() {
     this.agentSpawns.forEach((spawn) => {
       const key = spawn.spriteKey;
@@ -613,7 +624,7 @@ export class OfficeScene extends Phaser.Scene {
     const roomSpotCounter: Record<string, number> = {};
 
     this.agentSpawns.forEach((spawn) => {
-      const room = ROOMS[spawn.homeRoom];
+      const room = getScaledRoom(spawn.homeRoom);
       const usedCount = roomSpotCounter[spawn.homeRoom] || 0;
       const spotIndex = usedCount % room.spots.length;
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;

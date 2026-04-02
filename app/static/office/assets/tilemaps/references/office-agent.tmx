@@ -1,37 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="16" nextobjectid="1">
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="16" nextobjectid="1">
  <editorsettings>
   <export target="the_office.json" format="json"/>
  </editorsettings>
  <tileset firstgid="1" name="Room_Builder_Office_32x32" tilewidth="32" tileheight="32" tilecount="224" columns="16">
   <image source="../Modern_Office_Revamped_v1.2/1_Room_Builder_Office/Room_Builder_Office_32x32.png" width="512" height="448"/>
  </tileset>
- <tileset firstgid="225" name="blocks_1" tilewidth="32" tileheight="32" tilecount="0" columns="10">
+ <tileset firstgid="225" name="blocks_1" tilewidth="32" tileheight="32" tilecount="80" columns="10">
   <image source="../blocks_1.png" width="320" height="256"/>
  </tileset>
  <tileset firstgid="305" name="Modern_Office_32x32" tilewidth="32" tileheight="32" tilecount="848" columns="16">
   <image source="../Modern_Office_Revamped_v1.2/Modern_Office_32x32.png" width="512" height="1696"/>
  </tileset>
  <tileset firstgid="1153" name="int_Basement_32x32" tilewidth="32" tileheight="32" tilecount="800" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/14_Basement_32x32.png" width="512" height="1600"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Basement_32x32.png" width="512" height="1600"/>
  </tileset>
  <tileset firstgid="1953" name="int_Bathroom_32x32" tilewidth="32" tileheight="32" tilecount="896" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/3_Bathroom_32x32.png" width="512" height="1792"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Bathroom_32x32.png" width="512" height="1792"/>
  </tileset>
  <tileset firstgid="2849" name="int_Classroom_and_library_32x32" tilewidth="32" tileheight="32" tilecount="544" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/5_Classroom_and_library_32x32.png" width="512" height="1088"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Classroom_and_library_32x32.png" width="512" height="1088"/>
  </tileset>
  <tileset firstgid="3393" name="int_Generic_32x32" tilewidth="32" tileheight="32" tilecount="1248" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/1_Generic_32x32.png" width="512" height="2496"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Generic_32x32.png" width="512" height="2496"/>
  </tileset>
  <tileset firstgid="4641" name="int_Kitchen_32x32" tilewidth="32" tileheight="32" tilecount="784" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/12_Kitchen_32x32.png" width="512" height="1568"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Kitchen_32x32.png" width="512" height="1568"/>
  </tileset>
  <tileset firstgid="5425" name="int_Hospital_32x32" tilewidth="32" tileheight="32" tilecount="1760" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/19_Hospital_32x32.png" width="512" height="3520"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Hospital_32x32.png" width="512" height="3520"/>
  </tileset>
  <tileset firstgid="7185" name="int_Grocery_store_32x32" tilewidth="32" tileheight="32" tilecount="1248" columns="16">
-  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/16_Grocery_store_32x32.png" width="512" height="2496"/>
+  <image source="../moderninteriors-win/1_Interiors/32x32/Theme_Sorter_32x32/int_Grocery_store_32x32.png" width="512" height="2496"/>
  </tileset>
  <layer id="4" name="Floor Visuals" width="30" height="20">
   <data encoding="csv">
