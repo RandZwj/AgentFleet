@@ -3,9 +3,10 @@ import { EventBus } from '../../shared/events/EventBus';
 import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 
 // 当前角色素材按 32x64 切分后为 84 列 x 30 行。
-// Row 1: idle loop (24 frames: down 0-5, right 6-11, up 12-17, left 18-23)
-// Row 2: walk (same layout)
+// 第 1 行是 idle，第 2 行是 walk；这里按 0-based 行号计算 frame。
 const SPRITE_COLS = 84;
+const IDLE_ROW = 0;
+const WALK_ROW = 1;
 const BASE_MAP_WIDTH = 1280;
 const BASE_MAP_HEIGHT = 960;
 const CURRENT_MAP_WIDTH = 960;
@@ -354,7 +355,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!this.anims.exists(idleKey)) {
         const frames: Phaser.Types.Animations.AnimationFrame[] = [];
         for (let i = 0; i < 6; i++) {
-          frames.push({ key: spriteKey, frame: 1 * SPRITE_COLS + colStart + i });
+          frames.push({ key: spriteKey, frame: IDLE_ROW * SPRITE_COLS + colStart + i });
         }
         this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
       }
@@ -362,7 +363,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!this.anims.exists(walkKey)) {
         const frames: Phaser.Types.Animations.AnimationFrame[] = [];
         for (let i = 0; i < 6; i++) {
-          frames.push({ key: spriteKey, frame: 2 * SPRITE_COLS + colStart + i });
+          frames.push({ key: spriteKey, frame: WALK_ROW * SPRITE_COLS + colStart + i });
         }
         this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
       }
@@ -579,7 +580,7 @@ export class OfficeScene extends Phaser.Scene {
         if (!this.anims.exists(idleKey)) {
           const frames: Phaser.Types.Animations.AnimationFrame[] = [];
           for (let i = 0; i < 6; i++) {
-            frames.push({ key, frame: 1 * SPRITE_COLS + colStart + i });
+            frames.push({ key, frame: IDLE_ROW * SPRITE_COLS + colStart + i });
           }
           this.anims.create({ key: idleKey, frames, frameRate: 6, repeat: -1 });
         }
@@ -588,7 +589,7 @@ export class OfficeScene extends Phaser.Scene {
         if (!this.anims.exists(walkKey)) {
           const frames: Phaser.Types.Animations.AnimationFrame[] = [];
           for (let i = 0; i < 6; i++) {
-            frames.push({ key, frame: 2 * SPRITE_COLS + colStart + i });
+            frames.push({ key, frame: WALK_ROW * SPRITE_COLS + colStart + i });
           }
           this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
         }
@@ -607,7 +608,7 @@ export class OfficeScene extends Phaser.Scene {
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;
       const pos = room.spots[spotIndex];
 
-      const sprite = this.add.sprite(0, 0, spawn.spriteKey, SPRITE_COLS);
+      const sprite = this.add.sprite(0, 0, spawn.spriteKey, IDLE_ROW * SPRITE_COLS);
       sprite.play(`${spawn.spriteKey}-idle-down`);
 
       const nameTag = this.add.text(0, -42, spawn.name, {
