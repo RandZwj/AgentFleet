@@ -31421,7 +31421,7 @@
     {
       "columns": 1,
       "firstgid": 2561,
-      "image": "chair.png",
+      "image": "Room_Builder_Office_32x32.png",
       "imageheight": 1472,
       "imagewidth": 32,
       "margin": 0,
@@ -31447,7 +31447,7 @@
     {
       "columns": 16,
       "firstgid": 3432,
-      "image": "int_Generic_32x32.png",
+      "image": "Generic.png",
       "imageheight": 2496,
       "imagewidth": 512,
       "margin": 0,
@@ -31460,7 +31460,7 @@
     {
       "columns": 5,
       "firstgid": 4680,
-      "image": "computer.png",
+      "image": "Modern_Office_32x32.png",
       "imageheight": 64,
       "imagewidth": 480,
       "margin": 0,
@@ -31473,7 +31473,7 @@
     {
       "columns": 1,
       "firstgid": 4685,
-      "image": "whiteboard.png",
+      "image": "Modern_Office_32x32.png",
       "imageheight": 192,
       "imagewidth": 64,
       "margin": 0,
@@ -31486,7 +31486,7 @@
     {
       "columns": 16,
       "firstgid": 4688,
-      "image": "int_Basement_32x32.png",
+      "image": "Basement.png",
       "imageheight": 1600,
       "imagewidth": 512,
       "margin": 0,
@@ -31499,7 +31499,7 @@
     {
       "columns": 1,
       "firstgid": 5488,
-      "image": "vendingmachine.png",
+      "image": "Modern_Office_32x32.png",
       "imageheight": 72,
       "imagewidth": 48,
       "margin": 0,
