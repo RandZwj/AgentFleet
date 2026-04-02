@@ -91,6 +91,7 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
         "color": "#ec4899",
         "room_id": "meeting",
         "phaser_agent_id": "agt_art_designer",
+        "tools": "DESIGNER_TOOLS",
         "system_prompt": """你是工作室的美工设计，擅长视觉内容创作。
 
 ## 你的职责

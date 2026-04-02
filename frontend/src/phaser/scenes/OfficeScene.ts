@@ -2,18 +2,10 @@ import Phaser from 'phaser';
 import { EventBus } from '../../shared/events/EventBus';
 import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 
-// 当前角色素材按 32x64 切分后为 84 列 x 31 行。
-// 经过核对，这套图集用于办公室角色的待机/行走动画位于第 2、3 行（0-based 为 1、2）。
 const SPRITE_COLS = 84;
 const FRAMES_PER_DIRECTION = 6;
 const IDLE_ROW = 1;
 const WALK_ROW = 2;
-const BASE_MAP_WIDTH = 1280;
-const BASE_MAP_HEIGHT = 960;
-const CURRENT_MAP_WIDTH = 960;
-const CURRENT_MAP_HEIGHT = 640;
-const SCALE_X = CURRENT_MAP_WIDTH / BASE_MAP_WIDTH;
-const SCALE_Y = CURRENT_MAP_HEIGHT / BASE_MAP_HEIGHT;
 
 const MAP_TILESET_NAMES = [
   'Room_Builder_Office_32x32',
@@ -37,141 +29,78 @@ const VISIBLE_TILE_LAYERS = [
 ];
 
 // ============================================================
-// 房间定义 — 基于实际地图墙体分析
+// 房间定义 — 基于 office-agent.json 地图 (30×20 tiles, 960×640 px)
+// 坐标直接使用像素值 (tileX*32+16, tileY*32+16)
 // ============================================================
-// 地图尺寸: 40x30 tiles (1280x960 px)
-// 水平墙线:
-//   Y=288: X=640-1056 (门口 X=672-704)  → 经理室南墙
-//   Y=352: X=192-608  (门口 X=384-416)  → 展示厅南墙
-//   Y=512: X=192-640  (门口 X=384-416)  → 会议室北墙
-// 右侧 X>640 区域为开放空间（工位区+数据中心）
 
 const ROOMS: Record<
   string,
   {
     label: string;
-    labelPos: { x: number; y: number };
     entry: { x: number; y: number };
     spots: { x: number; y: number }[];
   }
 > = {
-  // 商品展厅（左上）— 导购员常驻，向客户推荐商品
   showroom: {
     label: '商品展厅',
-    labelPos: { x: 330, y: 120 },
-    entry: { x: 400, y: 365 },
+    entry: { x: 304, y: 208 },
     spots: [
-      { x: 265, y: 200 },
-      { x: 365, y: 200 },
-      { x: 465, y: 200 },
-      { x: 265, y: 280 },
-      { x: 365, y: 280 },
-      { x: 465, y: 280 },
+      { x: 208, y: 80 },
+      { x: 272, y: 80 },
+      { x: 336, y: 80 },
+      { x: 208, y: 144 },
+      { x: 272, y: 144 },
+      { x: 336, y: 144 },
     ],
   },
-  // 调度中心（右上）— 调度员常驻，分配任务
   manager: {
     label: '调度中心',
-    labelPos: { x: 840, y: 100 },
-    entry: { x: 688, y: 270 },
+    entry: { x: 464, y: 208 },
     spots: [
-      { x: 765, y: 160 },
-      { x: 865, y: 160 },
-      { x: 965, y: 160 },
-      { x: 765, y: 240 },
-      { x: 865, y: 240 },
-      { x: 965, y: 240 },
+      { x: 432, y: 80 },
+      { x: 528, y: 80 },
+      { x: 624, y: 80 },
+      { x: 432, y: 144 },
+      { x: 528, y: 144 },
+      { x: 624, y: 144 },
     ],
   },
-  // 协作室（左下）— 多 Agent 协同讨论
   meeting: {
     label: '协作室',
-    labelPos: { x: 330, y: 540 },
-    entry: { x: 400, y: 525 },
+    entry: { x: 304, y: 368 },
     spots: [
-      { x: 265, y: 620 },
-      { x: 365, y: 620 },
-      { x: 465, y: 620 },
-      { x: 265, y: 720 },
-      { x: 365, y: 720 },
-      { x: 465, y: 720 },
+      { x: 240, y: 400 },
+      { x: 304, y: 400 },
+      { x: 368, y: 400 },
+      { x: 240, y: 432 },
+      { x: 304, y: 432 },
+      { x: 368, y: 432 },
     ],
   },
-  // 待命区（右侧中部）— 待命 Agent 就绪等待
   workspace: {
     label: '待命区',
-    labelPos: { x: 840, y: 340 },
-    entry: { x: 850, y: 430 },
+    entry: { x: 336, y: 240 },
     spots: [
-      { x: 825, y: 500 },
-      { x: 920, y: 500 },
-      { x: 1005, y: 500 },
-      { x: 825, y: 580 },
-      { x: 920, y: 580 },
-      { x: 1005, y: 580 },
+      { x: 240, y: 240 },
+      { x: 336, y: 240 },
+      { x: 432, y: 240 },
+      { x: 240, y: 272 },
+      { x: 336, y: 272 },
+      { x: 432, y: 272 },
     ],
   },
-  // 数据仓库（右侧下部）— 理货员常驻，管理商品数据
   datacenter: {
     label: '数据仓库',
-    labelPos: { x: 840, y: 650 },
-    entry: { x: 848, y: 660 },
+    entry: { x: 720, y: 336 },
     spots: [
-      { x: 810, y: 730 },
-      { x: 900, y: 730 },
-      { x: 985, y: 730 },
-      { x: 810, y: 830 },
-      { x: 900, y: 830 },
-      { x: 985, y: 830 },
+      { x: 784, y: 272 },
+      { x: 848, y: 272 },
+      { x: 784, y: 304 },
+      { x: 848, y: 304 },
+      { x: 784, y: 336 },
+      { x: 848, y: 336 },
     ],
   },
-};
-
-// ============================================================
-// 走廊节点网络 — 基于实际墙体门口位置
-// ============================================================
-const CORRIDOR_NODES: { x: number; y: number; id: string }[] = [
-  // 展示厅门口（Y=352 墙体间隙 X=384-416 正下方）
-  { x: 400, y: 365, id: 'SHOW_DOOR' },
-  // 左侧走廊中心（Y=352 与 Y=512 两道墙之间）
-  { x: 400, y: 430, id: 'COR_LEFT' },
-  // 会议室门口（Y=512 墙体间隙 X=384-416 正上方）
-  { x: 400, y: 500, id: 'MEET_DOOR' },
-  // 中心节点（左侧走廊与右侧开放区交汇处）
-  { x: 620, y: 430, id: 'COR_CENTER' },
-  // 上方转角（通往经理室门口）
-  { x: 670, y: 300, id: 'COR_UPPER' },
-  // 经理室门口（Y=288 墙体间隙 X=672-704）
-  { x: 688, y: 270, id: 'MGR_DOOR' },
-  // 右侧走廊（进入工位区/数据中心）
-  { x: 850, y: 430, id: 'COR_RIGHT' },
-  // 工位区内部
-  { x: 900, y: 550, id: 'WORK_AREA' },
-  // 数据仓库门口（Y=608-640 墙体间隙 X=832-864）
-  { x: 848, y: 624, id: 'DATA_DOOR' },
-  // 数据仓库内部
-  { x: 900, y: 750, id: 'DATA_AREA' },
-];
-
-const CORRIDOR_EDGES: [string, string][] = [
-  ['SHOW_DOOR', 'COR_LEFT'],
-  ['COR_LEFT', 'MEET_DOOR'],
-  ['COR_LEFT', 'COR_CENTER'],
-  ['COR_CENTER', 'COR_UPPER'],
-  ['COR_UPPER', 'MGR_DOOR'],
-  ['COR_CENTER', 'COR_RIGHT'],
-  ['COR_RIGHT', 'WORK_AREA'],
-  ['WORK_AREA', 'DATA_DOOR'],
-  ['DATA_DOOR', 'DATA_AREA'],
-];
-
-// 房间出口对应的走廊节点
-const ROOM_CORRIDOR: Record<string, string> = {
-  showroom: 'SHOW_DOOR',
-  manager: 'MGR_DOOR',
-  meeting: 'MEET_DOOR',
-  workspace: 'COR_RIGHT',
-  datacenter: 'DATA_DOOR',
 };
 
 type Direction = 'down' | 'right' | 'up' | 'left';
@@ -187,25 +116,12 @@ function getFrameIndex(row: number, col: number): number {
   return row * SPRITE_COLS + col;
 }
 
-function scalePoint(point: { x: number; y: number }): { x: number; y: number } {
-  return {
-    x: Math.round(point.x * SCALE_X),
-    y: Math.round(point.y * SCALE_Y),
-  };
-}
-
-function getScaledRoom(roomId: string) {
-  const room = ROOMS[roomId] || ROOMS.workspace;
-  return {
-    ...room,
-    labelPos: scalePoint(room.labelPos),
-    entry: scalePoint(room.entry),
-    spots: room.spots.map(scalePoint),
-  };
+function getRoom(roomId: string) {
+  return ROOMS[roomId] || ROOMS.workspace;
 }
 
 // ============================================================
-// Agent 配置 — 从 agentRegistry 动态构建
+// Agent 配置
 // ============================================================
 function cssColorToHex(css: string): number {
   return parseInt(css.replace('#', ''), 16);
@@ -236,13 +152,16 @@ interface AgentCharacter {
   currentRoom: string;
   bubbleContainer?: Phaser.GameObjects.Container;
   bubbleTimer?: Phaser.Time.TimerEvent;
+  idleTween?: Phaser.Tweens.Tween;
+  workTween?: Phaser.Tweens.Tween;
 }
 
 export class OfficeScene extends Phaser.Scene {
   private agents: AgentCharacter[] = [];
   private agentSpawns: ReturnType<typeof buildAgentSpawns> = [];
   private map!: Phaser.Tilemaps.Tilemap;
-  private corridorGraph: Map<string, string[]> = new Map();
+  private collisionLayer?: Phaser.Tilemaps.TilemapLayer;
+  private wallLayer?: Phaser.Tilemaps.TilemapLayer;
 
   constructor() {
     super('OfficeScene');
@@ -250,10 +169,7 @@ export class OfficeScene extends Phaser.Scene {
 
   create() {
     this.agentSpawns = buildAgentSpawns();
-    this.buildCorridorGraph();
 
-    // 1. 地图：按 office.json 中的 tileset / tilelayer 直接渲染，
-    // 暂时跳过 blocks_1.png 对应的逻辑层。
     this.map = this.make.tilemap({ key: 'office-map' });
     const tilesets = MAP_TILESET_NAMES
       .map((tilesetName) => this.map.addTilesetImage(tilesetName, tilesetName))
@@ -263,34 +179,39 @@ export class OfficeScene extends Phaser.Scene {
       const layer = this.map.createLayer(layerName, tilesets, 0, 0);
       if (layer) {
         layer.setDepth(index);
+        if (layerName === 'Wall Visuals') {
+          this.wallLayer = layer;
+        }
       }
     });
 
-    // 2. 角色
+    // Collision Layer (invisible) for pathfinding
+    const cl = this.map.createLayer('Collision Layer', tilesets, 0, 0);
+    if (cl) {
+      cl.setVisible(false);
+      this.collisionLayer = cl;
+    }
+
     this.createAnimations();
     this.createAgents();
 
-    // 3. 摄像机 — 自适应缩放 + 拖拽/滚轮平移
+    // 摄像机
     const mapWidth = this.map.widthInPixels;
     const mapHeight = this.map.heightInPixels;
-    const chatBoxWidth = 520; // ChatBox 占据右侧宽度（含 Agent 列表侧栏）
+    const chatBoxWidth = 520;
     const cam = this.cameras.main;
 
-    // 将相机视口限定在 ChatBox 左侧区域，地图自然居中
     const vpWidth = this.scale.width - chatBoxWidth;
     const vpHeight = this.scale.height;
     cam.setViewport(0, 0, vpWidth, vpHeight);
 
-    // 计算刚好能显示全部地图的缩放比例（留5%边距）
     const fitZoom = Math.min(vpWidth / mapWidth, vpHeight / mapHeight) * 0.95;
     const initialZoom = Math.max(fitZoom, 0.5);
 
     cam.setBounds(-200, -200, mapWidth + 400, mapHeight + 400);
-    // 底部 Agent 信息卡遮挡地图，相机中心下移 80px 补偿
     cam.centerOn(mapWidth / 2 + 20, mapHeight / 2 + 80);
     cam.setZoom(initialZoom);
 
-    // 鼠标拖拽平移
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) {
         this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
@@ -298,18 +219,14 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
-    // 滚轮/触控板手势
-    // macOS 触控板: 双指滑动 = wheel(deltaX, deltaY)，捏合缩放 = wheel(ctrlKey=true)
     this.scale.canvas.addEventListener('wheel', (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        // 捏合缩放（ctrlKey 是 macOS 触控板 pinch 的标志）
         const newZoom = Phaser.Math.Clamp(
           this.cameras.main.zoom - e.deltaY * 0.005, 0.4, 4,
         );
         this.cameras.main.setZoom(newZoom);
       } else {
-        // 双指滑动 → 平移地图
         this.cameras.main.scrollX += e.deltaX / this.cameras.main.zoom;
         this.cameras.main.scrollY += e.deltaY / this.cameras.main.zoom;
       }
@@ -317,21 +234,17 @@ export class OfficeScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
 
-    // 4. 监听聊天事件驱动 Agent 移动 & 对话气泡
     EventBus.on('chat:agent-move', this.onChatAgentMove, this);
     EventBus.on('chat:agent-bubble', this.onAgentBubble, this);
-
-    // 5. 监听新 Agent 创建事件，动态添加精灵
     EventBus.on('agent:spawned', this.onAgentSpawned, this);
-
-    // 6. 监听 Agent 删除事件，移除精灵
     EventBus.on('agent:despawned', this.onAgentDespawned, this);
+    EventBus.on('agent:status', this.onAgentStatusChange, this);
 
     EventBus.emit('scene:ready');
   }
 
   // ============================================================
-  // 聊天事件 → Agent 地图移动 & 对话气泡
+  // 事件处理
   // ============================================================
   private onChatAgentMove(data: { agentId: string; roomId: string }) {
     this.moveAgentToRoom(data.agentId, data.roomId);
@@ -341,6 +254,27 @@ export class OfficeScene extends Phaser.Scene {
     this.showAgentBubble(data.agentSlug, data.text, data.duration);
   }
 
+  private onAgentStatusChange(data: { agentSlug: string; status: 'idle' | 'working' | 'standby' }) {
+    const agent = this.agents.find((a) => a.slug === data.agentSlug);
+    if (!agent) return;
+
+    if (data.status === 'working') {
+      this.startWorkingMotion(agent);
+      return;
+    }
+
+    if (data.status === 'idle' && !agent.isMoving) {
+      this.stopWorkingMotion(agent);
+      this.startIdleMotion(agent);
+    }
+
+    if (data.status === 'standby') {
+      this.stopWorkingMotion(agent);
+      this.stopIdleMotion(agent);
+      this.playAgentAnimation(agent, 'idle');
+    }
+  }
+
   private onAgentSpawned(data: {
     slug: string;
     displayName: string;
@@ -348,7 +282,6 @@ export class OfficeScene extends Phaser.Scene {
     roomId: string;
     phaserAgentId: string;
   }) {
-    // 避免重复添加
     if (this.agents.find((a) => a.slug === data.slug)) return;
 
     const spriteKey = getSpriteKey(data.slug);
@@ -358,19 +291,18 @@ export class OfficeScene extends Phaser.Scene {
 
     this.createAnimationsForSprite(spriteKey);
 
-    // 在目标房间分配站位
-    const room = getScaledRoom(homeRoom);
+    const room = getRoom(homeRoom);
     const usedCount = this.agents.filter((a) => a.currentRoom === homeRoom).length;
     const spotIndex = usedCount % room.spots.length;
     const pos = room.spots[spotIndex];
 
-    // 创建精灵
     const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
+    sprite.setOrigin(0.5, 1);
     sprite.play(`${spriteKey}-idle-down`);
 
-    const nameTag = this.add.text(0, -42, data.displayName, {
+    const nameTag = this.add.text(0, -82, data.displayName, {
       fontFamily: 'monospace',
-      fontSize: '13px',
+      fontSize: '11px',
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 3,
@@ -402,118 +334,182 @@ export class OfficeScene extends Phaser.Scene {
       homeRoom,
       currentRoom: homeRoom,
     });
+
+    this.startIdleMotion(this.agents[this.agents.length - 1]);
   }
 
   private onAgentDespawned(data: { slug: string }) {
     const idx = this.agents.findIndex((a) => a.slug === data.slug);
     if (idx === -1) return;
     const agent = this.agents[idx];
-    // 清除气泡
     if (agent.bubbleTimer) { agent.bubbleTimer.destroy(); }
     if (agent.bubbleContainer) { agent.bubbleContainer.destroy(); }
-    // 销毁容器（包含 sprite + nameTag）
+    if (agent.idleTween) { agent.idleTween.stop(); }
+    if (agent.workTween) { agent.workTween.stop(); }
     agent.container.destroy();
     this.agents.splice(idx, 1);
   }
 
   // ============================================================
-  // 走廊图 + BFS 寻路
+  // 网格寻路 — Collision + Wall 双层判定
   // ============================================================
-  private buildCorridorGraph() {
-    for (const node of CORRIDOR_NODES) {
-      this.corridorGraph.set(node.id, []);
+  private isWalkableTile(tileX: number, tileY: number): boolean {
+    if (tileX < 0 || tileY < 0 || tileX >= this.map.width || tileY >= this.map.height) {
+      return false;
     }
-    for (const [a, b] of CORRIDOR_EDGES) {
-      this.corridorGraph.get(a)!.push(b);
-      this.corridorGraph.get(b)!.push(a);
-    }
+
+    const collisionBlocked = this.collisionLayer?.getTileAt(tileX, tileY);
+    if (!collisionBlocked) return true;
+
+    // Collision blocked → allow passage if it's just furniture (no wall tile)
+    const wallBlocked = this.wallLayer?.getTileAt(tileX, tileY);
+    return !wallBlocked;
   }
 
-  private findCorridorPath(fromId: string, toId: string): string[] {
-    if (fromId === toId) return [fromId];
+  private worldToTile(point: { x: number; y: number }) {
+    const tileX = this.map.worldToTileX(point.x) ?? 0;
+    const tileY = this.map.worldToTileY(point.y) ?? 0;
+    return {
+      x: Phaser.Math.Clamp(tileX, 0, this.map.width - 1),
+      y: Phaser.Math.Clamp(tileY, 0, this.map.height - 1),
+    };
+  }
 
-    const visited = new Set<string>();
-    const queue: string[][] = [[fromId]];
-    visited.add(fromId);
+  private tileToWorld(tile: { x: number; y: number }) {
+    const worldX = this.map.tileToWorldX(tile.x) ?? 0;
+    const worldY = this.map.tileToWorldY(tile.y) ?? 0;
+    return {
+      x: worldX + this.map.tileWidth / 2,
+      y: worldY + this.map.tileHeight / 2,
+    };
+  }
 
-    while (queue.length > 0) {
-      const path = queue.shift()!;
-      const current = path[path.length - 1];
+  private findNearestWalkableTile(tile: { x: number; y: number }) {
+    if (this.isWalkableTile(tile.x, tile.y)) {
+      return tile;
+    }
 
-      for (const neighbor of this.corridorGraph.get(current) || []) {
-        if (neighbor === toId) return [...path, neighbor];
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          queue.push([...path, neighbor]);
+    const maxRadius = 5;
+    for (let radius = 1; radius <= maxRadius; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = tile.x + dx;
+          const y = tile.y + dy;
+          if (this.isWalkableTile(x, y)) {
+            return { x, y };
+          }
         }
       }
     }
-    return [fromId, toId]; // fallback
+
+    return null;
   }
 
-  private getNodePos(nodeId: string): { x: number; y: number } {
-    const node = CORRIDOR_NODES.find((n) => n.id === nodeId)!;
-    return scalePoint({ x: node.x, y: node.y });
+  private findTilePath(start: { x: number; y: number }, end: { x: number; y: number }) {
+    const key = (x: number, y: number) => `${x},${y}`;
+    const queue: Array<{ x: number; y: number }> = [start];
+    const visited = new Set([key(start.x, start.y)]);
+    const parent = new Map<string, string>();
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current.x === end.x && current.y === end.y) {
+        const path: Array<{ x: number; y: number }> = [];
+        let currentKey = key(end.x, end.y);
+
+        while (currentKey) {
+          const [xStr, yStr] = currentKey.split(',');
+          path.push({ x: Number(xStr), y: Number(yStr) });
+          const prev = parent.get(currentKey);
+          if (!prev) break;
+          currentKey = prev;
+        }
+
+        return path.reverse();
+      }
+
+      for (const dir of dirs) {
+        const next = { x: current.x + dir.x, y: current.y + dir.y };
+        const nextKey = key(next.x, next.y);
+        if (visited.has(nextKey) || !this.isWalkableTile(next.x, next.y)) {
+          continue;
+        }
+        visited.add(nextKey);
+        parent.set(nextKey, key(current.x, current.y));
+        queue.push(next);
+      }
+    }
+
+    return [];
+  }
+
+  private buildWorldPath(start: { x: number; y: number }, end: { x: number; y: number }) {
+    const startTile = this.findNearestWalkableTile(this.worldToTile(start));
+    const endTile = this.findNearestWalkableTile(this.worldToTile(end));
+
+    if (!startTile || !endTile) {
+      return [end];
+    }
+
+    const tilePath = this.findTilePath(startTile, endTile);
+    if (tilePath.length === 0) {
+      return [end];
+    }
+
+    // Simplify path: keep only direction-change waypoints
+    const worldPath: { x: number; y: number }[] = [];
+    for (let i = 1; i < tilePath.length; i++) {
+      const prev = i > 0 ? tilePath[i - 1] : tilePath[0];
+      const curr = tilePath[i];
+      const next = i < tilePath.length - 1 ? tilePath[i + 1] : null;
+
+      if (!next) {
+        worldPath.push(this.tileToWorld(curr));
+      } else {
+        const dx1 = curr.x - prev.x;
+        const dy1 = curr.y - prev.y;
+        const dx2 = next.x - curr.x;
+        const dy2 = next.y - curr.y;
+        if (dx1 !== dx2 || dy1 !== dy2) {
+          worldPath.push(this.tileToWorld(curr));
+        }
+      }
+    }
+
+    const last = worldPath[worldPath.length - 1];
+    if (!last || Math.abs(last.x - end.x) > 4 || Math.abs(last.y - end.y) > 4) {
+      worldPath.push(end);
+    }
+
+    return worldPath;
   }
 
   // ============================================================
-  // 公开 API：移动 Agent 到指定房间
+  // 移动 Agent
   // ============================================================
   public moveAgentToRoom(agentId: string, roomId: string) {
     const agent = this.agents.find((a) => a.agentId === agentId);
     if (!agent || agent.isMoving) return;
 
-    const targetRoom = getScaledRoom(roomId);
-
-    const fromRoom = agent.currentRoom;
-    const fullPath: { x: number; y: number }[] = [];
-
-    if (fromRoom === roomId) {
-      // 同房间 — 直接走到新站位
-      const usedSpots = this.agents
-        .filter((a) => a.currentRoom === roomId && a.agentId !== agentId)
-        .length;
-      const spotIndex = usedSpots % targetRoom.spots.length;
-      fullPath.push(targetRoom.spots[spotIndex]);
-    } else {
-      const fromCorridorId = ROOM_CORRIDOR[fromRoom];
-      const toCorridorId = ROOM_CORRIDOR[roomId];
-      if (!fromCorridorId || !toCorridorId) return;
-
-      // 1) 先走到当前房间的门口（不会穿墙）
-      const fromRoomData = getScaledRoom(fromRoom);
-      if (fromRoomData) {
-        fullPath.push(fromRoomData.entry);
-      }
-
-      // 2) 走廊 BFS 寻路（节点都在走廊/门口，不穿墙）
-      const corridorPath = this.findCorridorPath(fromCorridorId, toCorridorId);
-      for (const nodeId of corridorPath) {
-        fullPath.push(this.getNodePos(nodeId));
-      }
-
-      // 3) 进入目标房间
-      fullPath.push(targetRoom.entry);
-
-      // 4) 走到站位
-      const usedSpots = this.agents
-        .filter((a) => a.currentRoom === roomId && a.agentId !== agentId)
-        .length;
-      const spotIndex = usedSpots % targetRoom.spots.length;
-      fullPath.push(targetRoom.spots[spotIndex]);
-    }
-
-    // 去除连续重复/极近的路径点（entry ≈ corridor node 时）
-    const cleanPath: { x: number; y: number }[] = [fullPath[0]];
-    for (let i = 1; i < fullPath.length; i++) {
-      const prev = cleanPath[cleanPath.length - 1];
-      const curr = fullPath[i];
-      if (Math.abs(curr.x - prev.x) > 4 || Math.abs(curr.y - prev.y) > 4) {
-        cleanPath.push(curr);
-      }
-    }
+    const targetRoom = getRoom(roomId);
+    const usedSpots = this.agents
+      .filter((a) => a.currentRoom === roomId && a.agentId !== agentId)
+      .length;
+    const spotIndex = usedSpots % targetRoom.spots.length;
+    const targetPoint = targetRoom.spots[spotIndex];
+    const cleanPath = this.buildWorldPath(
+      { x: agent.container.x, y: agent.container.y },
+      targetPoint,
+    );
 
     agent.currentRoom = roomId;
+    this.stopIdleMotion(agent);
     this.moveAlongPath(agent, cleanPath, 0);
   }
 
@@ -521,6 +517,8 @@ export class OfficeScene extends Phaser.Scene {
     if (index >= path.length) {
       agent.isMoving = false;
       this.playAgentAnimation(agent, 'idle');
+      this.stopWorkingMotion(agent);
+      this.startIdleMotion(agent);
       return;
     }
 
@@ -536,10 +534,12 @@ export class OfficeScene extends Phaser.Scene {
 
     const dir = this.getDirection(dx, dy);
     agent.facing = dir;
+    this.stopWorkingMotion(agent);
+    this.stopIdleMotion(agent);
     this.playAgentAnimation(agent, 'walk', dir);
     agent.isMoving = true;
 
-    const duration = (distance / 80) * 1000; // 80px/s
+    const duration = (distance / 80) * 1000;
 
     this.tweens.add({
       targets: agent.container,
@@ -556,6 +556,9 @@ export class OfficeScene extends Phaser.Scene {
     });
   }
 
+  // ============================================================
+  // 动画
+  // ============================================================
   private createAnimations() {
     this.agentSpawns.forEach((spawn) => {
       this.createAnimationsForSprite(spawn.spriteKey);
@@ -586,22 +589,22 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private createAgents() {
-    // 按房间追踪已分配的站位数量
     const roomSpotCounter: Record<string, number> = {};
 
     this.agentSpawns.forEach((spawn) => {
-      const room = getScaledRoom(spawn.homeRoom);
+      const room = getRoom(spawn.homeRoom);
       const usedCount = roomSpotCounter[spawn.homeRoom] || 0;
       const spotIndex = usedCount % room.spots.length;
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;
       const pos = room.spots[spotIndex];
 
       const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
+      sprite.setOrigin(0.5, 1);
       sprite.play(`${spawn.spriteKey}-idle-down`);
 
-      const nameTag = this.add.text(0, -42, spawn.name, {
+      const nameTag = this.add.text(0, -82, spawn.name, {
         fontFamily: 'monospace',
-        fontSize: '13px',
+        fontSize: '11px',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3,
@@ -633,6 +636,8 @@ export class OfficeScene extends Phaser.Scene {
         homeRoom: spawn.homeRoom,
         currentRoom: spawn.homeRoom,
       });
+
+      this.startIdleMotion(this.agents[this.agents.length - 1]);
     });
   }
 
@@ -657,13 +662,10 @@ export class OfficeScene extends Phaser.Scene {
     const agent = this.agents.find((a) => a.slug === agentSlug);
     if (!agent) return;
 
-    // 移除已有气泡
     this.hideAgentBubble(agent);
 
-    // 截断文本
     const displayText = text.length > 40 ? text.slice(0, 37) + '...' : text;
 
-    // 创建文字（先测量尺寸）
     const bubbleText = this.add.text(0, 0, displayText, {
       fontFamily: 'monospace',
       fontSize: '14px',
@@ -682,40 +684,31 @@ export class OfficeScene extends Phaser.Scene {
     const bgW = bubbleText.width + padX * 2;
     const bgH = bubbleText.height + padY * 2;
 
-    // 绘制气泡背景
     const gfx = this.add.graphics();
 
-    // 填充 — 更不透明
     gfx.fillStyle(0x0a0a1e, 0.95);
     gfx.fillRoundedRect(-bgW / 2, -bgH, bgW, bgH, 4);
 
-    // 边框（Agent 专属颜色）— 更粗更亮
     gfx.lineStyle(2, agent.color, 0.9);
     gfx.strokeRoundedRect(-bgW / 2, -bgH, bgW, bgH, 4);
 
-    // 小三角尾巴
     gfx.fillStyle(0x0a0a1e, 0.95);
     gfx.fillTriangle(-5, 0, 5, 0, 0, tailH);
 
-    // 文字居中在背景内
     bubbleText.setPosition(0, -bgH / 2);
 
-    // 气泡容器 — 放在名字标签上方
-    const bubbleContainer = this.add.container(0, -62, [gfx, bubbleText]);
+    const bubbleContainer = this.add.container(0, -100, [gfx, bubbleText]);
     bubbleContainer.setAlpha(0);
 
-    // 加入 Agent 容器
     agent.container.add(bubbleContainer);
     agent.bubbleContainer = bubbleContainer;
 
-    // 淡入
     this.tweens.add({
       targets: bubbleContainer,
       alpha: 1,
       duration: 200,
     });
 
-    // 定时淡出消失
     agent.bubbleTimer = this.time.delayedCall(duration, () => {
       this.fadeOutBubble(agent);
     });
@@ -746,14 +739,65 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  // ============================================================
+  // 待机 & 工作状态动画
+  // ============================================================
+  private startIdleMotion(agent: AgentCharacter) {
+    if (agent.idleTween || agent.isMoving) return;
+
+    agent.idleTween = this.tweens.add({
+      targets: agent.sprite,
+      y: -3,
+      duration: 1000,
+      ease: 'Sine.InOut',
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopIdleMotion(agent: AgentCharacter) {
+    if (agent.idleTween) {
+      agent.idleTween.stop();
+      agent.idleTween = undefined;
+    }
+    agent.sprite.y = 0;
+  }
+
+  private startWorkingMotion(agent: AgentCharacter) {
+    if (agent.isMoving || agent.workTween) return;
+
+    this.stopIdleMotion(agent);
+    this.playAgentAnimation(agent, 'idle');
+    agent.workTween = this.tweens.add({
+      targets: agent.sprite,
+      angle: { from: -2, to: 2 },
+      scaleX: { from: 1.0, to: 1.03 },
+      scaleY: { from: 1.0, to: 0.98 },
+      duration: 180,
+      ease: 'Sine.InOut',
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopWorkingMotion(agent: AgentCharacter) {
+    if (agent.workTween) {
+      agent.workTween.stop();
+      agent.workTween = undefined;
+    }
+    agent.sprite.angle = 0;
+    agent.sprite.setScale(1, 1);
+  }
+
   shutdown() {
     EventBus.off('chat:agent-move', this.onChatAgentMove, this);
     EventBus.off('chat:agent-bubble', this.onAgentBubble, this);
     EventBus.off('agent:spawned', this.onAgentSpawned, this);
     EventBus.off('agent:despawned', this.onAgentDespawned, this);
+    EventBus.off('agent:status', this.onAgentStatusChange, this);
   }
 
   update(_time: number, _delta: number) {
-    // WebSocket 事件驱动（未来）
+    // reserved
   }
 }
