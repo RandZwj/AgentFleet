@@ -991,6 +991,7 @@ def list_models() -> ApiEnvelope:
         "openai": bool(app_settings.openai_api_key),
         "deepseek": bool(app_settings.deepseek_api_key),
         "dashscope": bool(app_settings.dashscope_api_key),
+        "minimax": bool(app_settings.minimax_api_key),
     }
 
     for m in models:
@@ -1013,6 +1014,7 @@ _PROVIDER_MAP = {
     "anthropic": "anthropic",
     "deepseek": "deepseek",
     "dashscope": "dashscope",
+    "minimax": "minimax",
 }
 
 # 推荐模型精选列表 — 只展示每个 provider 的主力 chat 模型
@@ -1056,6 +1058,10 @@ _RECOMMENDED_MODELS: Dict[str, list] = {
         "qwen-max",
         "qwen-vl-max",
     ],
+    "minimax": [
+        "minimax/MiniMax-M2.5",
+        "minimax/MiniMax-M2.7",
+    ],
 }
 
 
@@ -1083,6 +1089,8 @@ _DISPLAY_NAME_OVERRIDES: Dict[str, str] = {
     "qwen-turbo": "Qwen Turbo",
     "qwen-max": "Qwen Max",
     "qwen-vl-max": "Qwen VL Max（视觉）",
+    "minimax/MiniMax-M2.5": "MiniMax M2.5",
+    "minimax/MiniMax-M2.7": "MiniMax M2.7",
 }
 
 

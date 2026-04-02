@@ -29,7 +29,7 @@ class Settings:
     # ---------- MiniMax ----------
     minimax_api_key: str = os.getenv("MINIMAX_API_KEY", "").strip()
     minimax_api_base: str = os.getenv("MINIMAX_API_BASE", "https://api.minimax.chat/v1").strip()
-    minimax_model_name: str = os.getenv("MINIMAX_MODEL_NAME", "abab6.5s-chat").strip()
+    minimax_model_name: str = os.getenv("MINIMAX_MODEL_NAME", "MiniMax-M2.5").strip()
 
     # ---------- 默认模型 ----------
     default_llm_model: str = os.getenv("DEFAULT_LLM_MODEL", "gemini/gemini-2.0-flash").strip()

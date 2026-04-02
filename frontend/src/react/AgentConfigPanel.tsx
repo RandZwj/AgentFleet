@@ -246,6 +246,7 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
     anthropic: 'Anthropic',
     deepseek: 'DeepSeek',
     dashscope: '阿里云百炼 (DashScope)',
+    minimax: 'MiniMax',
   };
 
   const displayColor = config.color || agentColor;
