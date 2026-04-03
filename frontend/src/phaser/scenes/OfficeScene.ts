@@ -126,6 +126,21 @@ const ROOMS: Record<string, RoomDef> = {
       type: 'desk' as const,
     })),
   },
+  corridor: {
+    label: '走廊',
+    entry: { x: 336, y: 400 },
+    anchors: [
+      { x: 272, y: 400, facing: 'down', type: 'stand' },
+      { x: 400, y: 400, facing: 'down', type: 'stand' },
+      { x: 528, y: 400, facing: 'right', type: 'stand' },
+      { x: 272, y: 464, facing: 'down', type: 'stand' },
+      { x: 560, y: 464, facing: 'left', type: 'stand' },
+      { x: 144, y: 560, facing: 'right', type: 'stand' },
+      { x: 304, y: 560, facing: 'down', type: 'stand' },
+      { x: 688, y: 496, facing: 'down', type: 'stand' },
+      { x: 688, y: 592, facing: 'up', type: 'stand' },
+    ],
+  },
   datacenter: {
     label: '数据仓库',
     entry: { x: 720, y: 176 },
@@ -206,6 +221,7 @@ interface AgentCharacter {
   workTween?: Phaser.Tweens.Tween;
   statusIndicator?: Phaser.GameObjects.Container;
   statusDotTween?: Phaser.Tweens.Tween;
+  idleWalkTimer?: Phaser.Time.TimerEvent;
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -425,6 +441,7 @@ export class OfficeScene extends Phaser.Scene {
     if (agent.bubbleTimer) { agent.bubbleTimer.destroy(); }
     if (agent.bubbleContainer) { agent.bubbleContainer.destroy(); }
     if (agent.workTimer) { agent.workTimer.destroy(); }
+    if (agent.idleWalkTimer) { agent.idleWalkTimer.destroy(); }
     if (agent.idleTween) { agent.idleTween.stop(); }
     if (agent.workTween) { agent.workTween.stop(); }
     if (agent.statusDotTween) { agent.statusDotTween.stop(); }
@@ -533,18 +550,17 @@ export class OfficeScene extends Phaser.Scene {
     const endTile = this.findNearestWalkableTile(this.worldToTile(end));
 
     if (!startTile || !endTile) {
-      return [end];
+      return [];
     }
 
     const tilePath = this.findTilePath(startTile, endTile);
     if (tilePath.length === 0) {
-      return [end];
+      return [];
     }
 
-    // Simplify path: keep only direction-change waypoints
     const worldPath: { x: number; y: number }[] = [];
     for (let i = 1; i < tilePath.length; i++) {
-      const prev = i > 0 ? tilePath[i - 1] : tilePath[0];
+      const prev = tilePath[i - 1];
       const curr = tilePath[i];
       const next = i < tilePath.length - 1 ? tilePath[i + 1] : null;
 
@@ -559,11 +575,6 @@ export class OfficeScene extends Phaser.Scene {
           worldPath.push(this.tileToWorld(curr));
         }
       }
-    }
-
-    const last = worldPath[worldPath.length - 1];
-    if (!last || Math.abs(last.x - end.x) > 4 || Math.abs(last.y - end.y) > 4) {
-      worldPath.push(end);
     }
 
     return worldPath;
@@ -656,6 +667,11 @@ export class OfficeScene extends Phaser.Scene {
       { x: agent.container.x, y: agent.container.y },
       { x: anchor.x, y: anchor.y },
     );
+
+    if (cleanPath.length === 0) {
+      this.startIdleMotion(agent);
+      return;
+    }
 
     agent.currentRoom = roomId;
     agent.currentAnchor = anchor;
@@ -919,6 +935,10 @@ export class OfficeScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
     });
+
+    if (agent.workStatus === 'idle') {
+      this.scheduleIdleWalk(agent);
+    }
   }
 
   private stopIdleMotion(agent: AgentCharacter) {
@@ -927,6 +947,60 @@ export class OfficeScene extends Phaser.Scene {
       agent.idleTween = undefined;
     }
     agent.sprite.y = 0;
+    this.cancelIdleWalk(agent);
+  }
+
+  private scheduleIdleWalk(agent: AgentCharacter) {
+    if (agent.idleWalkTimer) return;
+    const delay = Phaser.Math.Between(8000, 20000);
+    agent.idleWalkTimer = this.time.delayedCall(delay, () => {
+      agent.idleWalkTimer = undefined;
+      this.doIdleWalk(agent);
+    });
+  }
+
+  private cancelIdleWalk(agent: AgentCharacter) {
+    if (agent.idleWalkTimer) {
+      agent.idleWalkTimer.destroy();
+      agent.idleWalkTimer = undefined;
+    }
+  }
+
+  private doIdleWalk(agent: AgentCharacter) {
+    if (agent.isMoving || agent.workStatus === 'working') return;
+
+    const maxTileDist = 12;
+    const agentTile = this.worldToTile({ x: agent.container.x, y: agent.container.y });
+
+    let target: { x: number; y: number } | null = null;
+    for (let i = 0; i < 15; i++) {
+      const tx = agentTile.x + Phaser.Math.Between(-maxTileDist, maxTileDist);
+      const ty = agentTile.y + Phaser.Math.Between(-maxTileDist, maxTileDist);
+      if (tx === agentTile.x && ty === agentTile.y) continue;
+      if (!this.isWalkableTile(tx, ty)) continue;
+      target = { x: tx, y: ty };
+      break;
+    }
+
+    if (!target) {
+      this.scheduleIdleWalk(agent);
+      return;
+    }
+
+    const worldTarget = this.tileToWorld(target);
+    const path = this.buildWorldPath(
+      { x: agent.container.x, y: agent.container.y },
+      worldTarget,
+    );
+
+    if (path.length === 0) {
+      this.scheduleIdleWalk(agent);
+      return;
+    }
+
+    agent.currentAnchor = undefined;
+    this.stopIdleMotion(agent);
+    this.moveAlongPath(agent, path, 0);
   }
 
   private startWorkingMotion(agent: AgentCharacter) {
@@ -934,10 +1008,9 @@ export class OfficeScene extends Phaser.Scene {
 
     this.stopIdleMotion(agent);
     this.playAgentAnimation(agent, 'idle');
-    agent.sprite.y = 8;
     agent.workTween = this.tweens.add({
       targets: agent.sprite,
-      y: { from: 8, to: 6 },
+      y: { from: 0, to: -2 },
       angle: { from: -1, to: 1 },
       duration: 350,
       ease: 'Sine.InOut',
