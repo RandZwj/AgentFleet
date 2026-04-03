@@ -89,8 +89,8 @@ export class PreloadScene extends Phaser.Scene {
     for (let i = 7; i <= 20; i++) {
       const key = `char_${String(i).padStart(2, '0')}`;
       this.load.spritesheet(key, `assets/sprites/characters/${key}.png`, {
-        frameWidth: 32,
-        frameHeight: 64,
+        frameWidth: 48,
+        frameHeight: 96,
       });
     }
   }

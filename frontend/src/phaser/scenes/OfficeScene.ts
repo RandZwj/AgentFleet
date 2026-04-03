@@ -2,10 +2,10 @@ import Phaser from 'phaser';
 import { EventBus } from '../../shared/events/EventBus';
 import { getAgentsCached, getSpriteKey } from '../../shared/agentRegistry';
 
-const SPRITE_COLS = 84;
+const SPRITE_COLS = 56;
 const FRAMES_PER_DIRECTION = 6;
-const IDLE_ROW = 1;
-const WALK_ROW = 2;
+const IDLE_ROW = 0;
+const WALK_ROW = 1;
 
 const MAP_TILESET_NAMES = [
   'Room_Builder_Office_32x32',
@@ -105,12 +105,21 @@ const ROOMS: Record<
 
 type Direction = 'down' | 'right' | 'up' | 'left';
 
-const DIRECTION_FRAME_LAYOUT: { dir: Direction; colStart: number }[] = [
-  { dir: 'down', colStart: 0 },
-  { dir: 'right', colStart: 6 },
-  { dir: 'up', colStart: 12 },
-  { dir: 'left', colStart: 18 },
-];
+const IDLE_COL: Record<Direction, number> = {
+  right: 0,
+  up: 1,
+  left: 2,
+  down: 3,
+};
+
+const WALK_COL_START: Record<Direction, number> = {
+  right: 0,
+  up: 6,
+  left: 12,
+  down: 18,
+};
+
+const DIRECTIONS: Direction[] = ['down', 'right', 'up', 'left'];
 
 function getFrameIndex(row: number, col: number): number {
   return row * SPRITE_COLS + col;
@@ -161,7 +170,6 @@ export class OfficeScene extends Phaser.Scene {
   private agentSpawns: ReturnType<typeof buildAgentSpawns> = [];
   private map!: Phaser.Tilemaps.Tilemap;
   private collisionLayer?: Phaser.Tilemaps.TilemapLayer;
-  private wallLayer?: Phaser.Tilemaps.TilemapLayer;
 
   constructor() {
     super('OfficeScene');
@@ -179,9 +187,6 @@ export class OfficeScene extends Phaser.Scene {
       const layer = this.map.createLayer(layerName, tilesets, 0, 0);
       if (layer) {
         layer.setDepth(index);
-        if (layerName === 'Wall Visuals') {
-          this.wallLayer = layer;
-        }
       }
     });
 
@@ -296,11 +301,11 @@ export class OfficeScene extends Phaser.Scene {
     const spotIndex = usedCount % room.spots.length;
     const pos = room.spots[spotIndex];
 
-    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
+    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL.down));
     sprite.setOrigin(0.5, 1);
     sprite.play(`${spriteKey}-idle-down`);
 
-    const nameTag = this.add.text(0, -82, data.displayName, {
+    const nameTag = this.add.text(0, -100, data.displayName, {
       fontFamily: 'monospace',
       fontSize: '11px',
       color: '#ffffff',
@@ -312,7 +317,7 @@ export class OfficeScene extends Phaser.Scene {
 
     const container = this.add.container(pos.x, pos.y, [sprite, nameTag]);
     container.setDepth(pos.y);
-    container.setSize(32, 64);
+    container.setSize(48, 96);
     container.setInteractive({ useHandCursor: true });
 
     container.on('pointerdown', () => {
@@ -359,11 +364,7 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     const collisionBlocked = this.collisionLayer?.getTileAt(tileX, tileY);
-    if (!collisionBlocked) return true;
-
-    // Collision blocked → allow passage if it's just furniture (no wall tile)
-    const wallBlocked = this.wallLayer?.getTileAt(tileX, tileY);
-    return !wallBlocked;
+    return !collisionBlocked;
   }
 
   private worldToTile(point: { x: number; y: number }) {
@@ -566,12 +567,12 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private createAnimationsForSprite(spriteKey: string) {
-    DIRECTION_FRAME_LAYOUT.forEach(({ dir, colStart }) => {
+    for (const dir of DIRECTIONS) {
       const idleKey = `${spriteKey}-idle-${dir}`;
       if (!this.anims.exists(idleKey)) {
         this.anims.create({
           key: idleKey,
-          frames: [{ key: spriteKey, frame: getFrameIndex(IDLE_ROW, colStart) }],
+          frames: [{ key: spriteKey, frame: getFrameIndex(IDLE_ROW, IDLE_COL[dir]) }],
           frameRate: 1,
           repeat: 0,
         });
@@ -579,13 +580,14 @@ export class OfficeScene extends Phaser.Scene {
 
       const walkKey = `${spriteKey}-walk-${dir}`;
       if (!this.anims.exists(walkKey)) {
+        const walkStart = WALK_COL_START[dir];
         const frames: Phaser.Types.Animations.AnimationFrame[] = [];
         for (let i = 0; i < FRAMES_PER_DIRECTION; i++) {
-          frames.push({ key: spriteKey, frame: getFrameIndex(WALK_ROW, colStart + i) });
+          frames.push({ key: spriteKey, frame: getFrameIndex(WALK_ROW, walkStart + i) });
         }
         this.anims.create({ key: walkKey, frames, frameRate: 10, repeat: -1 });
       }
-    });
+    }
   }
 
   private createAgents() {
@@ -598,11 +600,11 @@ export class OfficeScene extends Phaser.Scene {
       roomSpotCounter[spawn.homeRoom] = usedCount + 1;
       const pos = room.spots[spotIndex];
 
-      const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, DIRECTION_FRAME_LAYOUT[0].colStart));
+      const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL.down));
       sprite.setOrigin(0.5, 1);
       sprite.play(`${spawn.spriteKey}-idle-down`);
 
-      const nameTag = this.add.text(0, -82, spawn.name, {
+      const nameTag = this.add.text(0, -100, spawn.name, {
         fontFamily: 'monospace',
         fontSize: '11px',
         color: '#ffffff',
@@ -614,7 +616,7 @@ export class OfficeScene extends Phaser.Scene {
 
       const container = this.add.container(pos.x, pos.y, [sprite, nameTag]);
       container.setDepth(pos.y);
-      container.setSize(32, 64);
+      container.setSize(48, 96);
       container.setInteractive({ useHandCursor: true });
 
       container.on('pointerdown', () => {
