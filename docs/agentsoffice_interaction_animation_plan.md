@@ -452,7 +452,7 @@
 - 用户可以直观看懂角色为什么移动
 - 角色移动目标不再只是房间空位
 
-### P1-1：电脑桌前工作交互
+### P1-1：电脑桌前工作交互 ✅ 已完成（2026-04-03）
 
 目标：
 
@@ -460,14 +460,29 @@
 
 实施内容：
 
-- 增加电脑桌/工位锚点
-- 角色接任务后移动到工位前
-- 角色面向电脑并播放工作效果
+- 新增 `workStatus` 字段追踪角色的工作状态（`'idle' | 'working'`）
+- 新增 `isAtWorkAnchor()` 判断角色是否在工位锚点（`desk` / `screen` 类型）
+- 重写 `onAgentStatusChange`：working 时启动工作动画，idle 时播放完成效果
+- 修改 `moveAlongPath` 到达逻辑：根据 `workStatus` 决定工作还是待机动画
+- 修改 `moveAgentToRoom`：支持中断正在进行的移动，移动前清理工作状态
+- 增强 `startWorkingMotion`：Y 轴微抖 + 小角度摆动模拟敲键盘
+- 新增 `showWorkingIndicator`：头顶 ⚡ 脉冲图标
+- 新增 `showCompletionEffect`：✅ 图标上浮渐隐
 
-验收标准：
+完整事件链路：
 
-- 至少一个房间内存在真实工位交互演出
-- 用户能看懂角色在电脑前工作
+1. `process` 事件 → `agent:status working` + `chat:agent-move datacenter`
+2. 角色走到工位（desk/screen 锚点），到达后自动工作动画 + ⚡ 指示器
+3. `message` 事件 → `chat:agent-move home_room` → 中断工作，走回原位
+4. `done` 事件 → `agent:status idle` → ✅ 完成效果 → 恢复待机浮动
+
+验收结果：
+
+- datacenter 房间 desk/screen 锚点支持工作交互演出
+- 角色到达工位后面向目标物件并播放敲键盘动画
+- 工作中头顶显示 ⚡ 脉冲指示器
+- 任务完成时显示 ✅ 上浮效果
+- 支持移动中断：新移动指令可以打断正在进行的路径
 
 ### P1-2：待机随机游走与弱交互
 

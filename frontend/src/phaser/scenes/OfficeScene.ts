@@ -51,9 +51,9 @@ const ROOMS: Record<string, RoomDef> = {
     label: '商品展厅',
     entry: { x: 304, y: 208 },
     anchors: [
-      { x: 176, y: 160, facing: 'up', type: 'desk' },
-      { x: 240, y: 160, facing: 'up', type: 'desk' },
-      { x: 304, y: 160, facing: 'up', type: 'desk' },
+      { x: 176, y: 160, facing: 'up', type: 'stand' },
+      { x: 240, y: 160, facing: 'up', type: 'stand' },
+      { x: 304, y: 160, facing: 'up', type: 'stand' },
       { x: 176, y: 192, facing: 'down', type: 'stand' },
       { x: 240, y: 192, facing: 'down', type: 'stand' },
       { x: 304, y: 192, facing: 'down', type: 'stand' },
@@ -97,14 +97,14 @@ const ROOMS: Record<string, RoomDef> = {
   },
   datacenter: {
     label: '数据仓库',
-    entry: { x: 720, y: 336 },
+    entry: { x: 720, y: 176 },
     anchors: [
-      { x: 784, y: 272, facing: 'up', type: 'screen' },
-      { x: 848, y: 272, facing: 'up', type: 'screen' },
-      { x: 784, y: 336, facing: 'up', type: 'desk' },
-      { x: 848, y: 336, facing: 'up', type: 'desk' },
-      { x: 784, y: 400, facing: 'down', type: 'stand' },
-      { x: 848, y: 400, facing: 'down', type: 'stand' },
+      { x: 752, y: 112, facing: 'right', type: 'desk' },
+      { x: 752, y: 144, facing: 'right', type: 'desk' },
+      { x: 848, y: 112, facing: 'up', type: 'screen' },
+      { x: 848, y: 144, facing: 'up', type: 'screen' },
+      { x: 720, y: 112, facing: 'down', type: 'stand' },
+      { x: 720, y: 176, facing: 'down', type: 'stand' },
     ],
   },
 };
@@ -166,10 +166,15 @@ interface AgentCharacter {
   homeRoom: string;
   currentRoom: string;
   currentAnchor?: Anchor;
+  workStatus: 'idle' | 'working';
+  pendingMoveRoom?: string;
+  workTimer?: Phaser.Time.TimerEvent;
   bubbleContainer?: Phaser.GameObjects.Container;
   bubbleTimer?: Phaser.Time.TimerEvent;
   idleTween?: Phaser.Tweens.Tween;
   workTween?: Phaser.Tweens.Tween;
+  statusIndicator?: Phaser.GameObjects.Container;
+  statusDotTween?: Phaser.Tweens.Tween;
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -271,17 +276,49 @@ export class OfficeScene extends Phaser.Scene {
     if (!agent) return;
 
     if (data.status === 'working') {
-      this.startWorkingMotion(agent);
+      agent.workStatus = 'working';
+      if (!agent.isMoving && this.isAtWorkAnchor(agent)) {
+        this.stopIdleMotion(agent);
+        this.startWorkingMotion(agent);
+        this.showWorkingIndicator(agent);
+      }
       return;
     }
 
-    if (data.status === 'idle' && !agent.isMoving) {
+    if (data.status === 'idle') {
+      const wasWorking = agent.workStatus === 'working';
+      agent.workStatus = 'idle';
+
+      if (agent.workTimer) {
+        agent.workTimer.destroy();
+        agent.workTimer = undefined;
+      }
+
+      if (wasWorking && agent.pendingMoveRoom) {
+        const dest = agent.pendingMoveRoom;
+        agent.pendingMoveRoom = undefined;
+        this.showCompletionEffect(agent);
+        this.time.delayedCall(600, () => {
+          this.executeMoveToRoom(agent, dest);
+        });
+        return;
+      }
+
       this.stopWorkingMotion(agent);
-      this.startIdleMotion(agent);
+      this.hideWorkingIndicator(agent);
+      if (wasWorking && !agent.isMoving) {
+        this.showCompletionEffect(agent);
+      }
+      if (!agent.isMoving) {
+        this.startIdleMotion(agent);
+      }
+      return;
     }
 
     if (data.status === 'standby') {
+      agent.workStatus = 'idle';
       this.stopWorkingMotion(agent);
+      this.hideWorkingIndicator(agent);
       this.stopIdleMotion(agent);
       this.playAgentAnimation(agent, 'idle');
     }
@@ -344,6 +381,7 @@ export class OfficeScene extends Phaser.Scene {
       homeRoom,
       currentRoom: homeRoom,
       currentAnchor: anchor,
+      workStatus: 'idle',
     });
 
     this.startIdleMotion(this.agents[this.agents.length - 1]);
@@ -355,8 +393,11 @@ export class OfficeScene extends Phaser.Scene {
     const agent = this.agents[idx];
     if (agent.bubbleTimer) { agent.bubbleTimer.destroy(); }
     if (agent.bubbleContainer) { agent.bubbleContainer.destroy(); }
+    if (agent.workTimer) { agent.workTimer.destroy(); }
     if (agent.idleTween) { agent.idleTween.stop(); }
     if (agent.workTween) { agent.workTween.stop(); }
+    if (agent.statusDotTween) { agent.statusDotTween.stop(); }
+    if (agent.statusIndicator) { agent.statusIndicator.destroy(); }
     agent.container.destroy();
     this.agents.splice(idx, 1);
   }
@@ -516,12 +557,68 @@ export class OfficeScene extends Phaser.Scene {
     return free[0];
   }
 
+  private findNearestFreeWorkAnchor(agent: AgentCharacter): { roomId: string; anchor: Anchor } | null {
+    let best: { roomId: string; anchor: Anchor; dist: number } | null = null;
+
+    for (const [roomId, room] of Object.entries(ROOMS)) {
+      const occupied = new Set(
+        this.agents
+          .filter((a) => a.currentRoom === roomId && a.agentId !== agent.agentId && a.currentAnchor)
+          .map((a) => `${a.currentAnchor!.x},${a.currentAnchor!.y}`),
+      );
+
+      for (const anchor of room.anchors) {
+        if (anchor.type !== 'desk' && anchor.type !== 'screen') continue;
+        if (occupied.has(`${anchor.x},${anchor.y}`)) continue;
+
+        const dx = anchor.x - agent.container.x;
+        const dy = anchor.y - agent.container.y;
+        const dist = dx * dx + dy * dy;
+
+        if (!best || dist < best.dist) {
+          best = { roomId, anchor, dist };
+        }
+      }
+    }
+
+    return best;
+  }
+
   public moveAgentToRoom(agentId: string, roomId: string) {
     const agent = this.agents.find((a) => a.agentId === agentId);
-    if (!agent || agent.isMoving) return;
+    if (!agent) return;
 
-    const isWorkTrip = roomId !== agent.homeRoom;
-    const anchor = this.findFreeAnchor(roomId, agentId, isWorkTrip);
+    if (agent.workStatus === 'working' && roomId === agent.homeRoom) {
+      agent.pendingMoveRoom = roomId;
+      return;
+    }
+
+    if (roomId !== agent.homeRoom) {
+      const workTarget = this.findNearestFreeWorkAnchor(agent);
+      if (workTarget) {
+        this.executeMoveToRoom(agent, workTarget.roomId, workTarget.anchor);
+        return;
+      }
+    }
+
+    this.executeMoveToRoom(agent, roomId);
+  }
+
+  private executeMoveToRoom(agent: AgentCharacter, roomId: string, targetAnchor?: Anchor) {
+    if (agent.isMoving) {
+      this.tweens.killTweensOf(agent.container);
+      agent.isMoving = false;
+    }
+
+    if (agent.workTimer) {
+      agent.workTimer.destroy();
+      agent.workTimer = undefined;
+    }
+    agent.pendingMoveRoom = undefined;
+    this.stopWorkingMotion(agent);
+    this.hideWorkingIndicator(agent);
+
+    const anchor = targetAnchor || this.findFreeAnchor(roomId, agent.agentId, roomId !== agent.homeRoom);
     if (!anchor) return;
 
     const cleanPath = this.buildWorldPath(
@@ -542,8 +639,23 @@ export class OfficeScene extends Phaser.Scene {
         agent.facing = arrivalFacing;
       }
       this.playAgentAnimation(agent, 'idle');
-      this.stopWorkingMotion(agent);
-      this.startIdleMotion(agent);
+
+      if (agent.workStatus === 'working' && this.isAtWorkAnchor(agent)) {
+        this.startWorkingMotion(agent);
+        this.showWorkingIndicator(agent);
+        if (agent.pendingMoveRoom) {
+          const dest = agent.pendingMoveRoom;
+          agent.workTimer = this.time.delayedCall(3000, () => {
+            agent.workTimer = undefined;
+            this.showCompletionEffect(agent);
+            agent.workStatus = 'idle';
+            this.executeMoveToRoom(agent, dest);
+          });
+        }
+      } else {
+        this.stopWorkingMotion(agent);
+        this.startIdleMotion(agent);
+      }
       return;
     }
 
@@ -657,6 +769,7 @@ export class OfficeScene extends Phaser.Scene {
         homeRoom: spawn.homeRoom,
         currentRoom: spawn.homeRoom,
         currentAnchor: anchor,
+        workStatus: 'idle',
       });
 
       this.startIdleMotion(this.agents[this.agents.length - 1]);
@@ -682,7 +795,7 @@ export class OfficeScene extends Phaser.Scene {
   // ============================================================
   public showAgentBubble(agentSlug: string, text: string, duration = 4000) {
     const agent = this.agents.find((a) => a.slug === agentSlug);
-    if (!agent) return;
+    if (!agent || !text || !text.trim()) return;
 
     this.hideAgentBubble(agent);
 
@@ -792,13 +905,13 @@ export class OfficeScene extends Phaser.Scene {
     this.playAgentAnimation(agent, 'idle');
     agent.workTween = this.tweens.add({
       targets: agent.sprite,
-      angle: { from: -2, to: 2 },
-      scaleX: { from: 1.0, to: 1.03 },
-      scaleY: { from: 1.0, to: 0.98 },
-      duration: 180,
+      y: { from: 0, to: -2 },
+      angle: { from: -1, to: 1 },
+      duration: 350,
       ease: 'Sine.InOut',
       yoyo: true,
       repeat: -1,
+      repeatDelay: 80,
     });
   }
 
@@ -807,8 +920,62 @@ export class OfficeScene extends Phaser.Scene {
       agent.workTween.stop();
       agent.workTween = undefined;
     }
+    agent.sprite.y = 0;
     agent.sprite.angle = 0;
     agent.sprite.setScale(1, 1);
+  }
+
+  private isAtWorkAnchor(agent: AgentCharacter): boolean {
+    return !!agent.currentAnchor &&
+      (agent.currentAnchor.type === 'desk' || agent.currentAnchor.type === 'screen');
+  }
+
+  private showWorkingIndicator(agent: AgentCharacter) {
+    if (agent.statusIndicator) return;
+
+    const icon = this.add.text(0, 0, '⚡', { fontSize: '14px' });
+    icon.setOrigin(0.5);
+
+    const indicatorContainer = this.add.container(0, -112, [icon]);
+    agent.container.add(indicatorContainer);
+    agent.statusIndicator = indicatorContainer;
+
+    agent.statusDotTween = this.tweens.add({
+      targets: icon,
+      alpha: { from: 1, to: 0.3 },
+      scaleX: { from: 1, to: 0.7 },
+      scaleY: { from: 1, to: 0.7 },
+      duration: 700,
+      ease: 'Sine.InOut',
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private hideWorkingIndicator(agent: AgentCharacter) {
+    if (agent.statusDotTween) {
+      agent.statusDotTween.stop();
+      agent.statusDotTween = undefined;
+    }
+    if (agent.statusIndicator) {
+      agent.statusIndicator.destroy();
+      agent.statusIndicator = undefined;
+    }
+  }
+
+  private showCompletionEffect(agent: AgentCharacter) {
+    const check = this.add.text(0, -112, '✅', { fontSize: '14px' });
+    check.setOrigin(0.5);
+    agent.container.add(check);
+
+    this.tweens.add({
+      targets: check,
+      y: check.y - 30,
+      alpha: { from: 1, to: 0 },
+      duration: 1200,
+      ease: 'Power2',
+      onComplete: () => check.destroy(),
+    });
   }
 
   shutdown() {
