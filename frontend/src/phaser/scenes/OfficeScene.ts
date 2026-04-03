@@ -325,7 +325,11 @@ export class OfficeScene extends Phaser.Scene {
     if (!agent) return;
 
     if (data.status === 'working') {
+      const wasIdle = agent.workStatus === 'idle';
       agent.workStatus = 'working';
+      if (wasIdle) {
+        this.playReceiveTaskEffect(agent);
+      }
       this.showThinkingIndicator(agent);
       if (!agent.isMoving && this.isAtWorkAnchor(agent)) {
         this.hideThinkingIndicator(agent);
@@ -424,6 +428,10 @@ export class OfficeScene extends Phaser.Scene {
 
     container.on('pointerdown', () => {
       EventBus.emit('agent:clicked', { agentId, name: data.displayName });
+      const ag = this.agents.find((a) => a.agentId === agentId);
+      if (ag && ag.workStatus === 'idle') {
+        this.playGreetEffect(ag);
+      }
     });
     container.on('pointerover', () => sprite.setTint(0xffd700));
     container.on('pointerout', () => sprite.clearTint());
@@ -815,6 +823,10 @@ export class OfficeScene extends Phaser.Scene {
 
       container.on('pointerdown', () => {
         EventBus.emit('agent:clicked', { agentId: spawn.agentId, name: spawn.name });
+        const ag = this.agents.find((a) => a.agentId === spawn.agentId);
+        if (ag && ag.workStatus === 'idle') {
+          this.playGreetEffect(ag);
+        }
       });
       container.on('pointerover', () => sprite.setTint(0xffd700));
       container.on('pointerout', () => sprite.clearTint());
@@ -1185,6 +1197,78 @@ export class OfficeScene extends Phaser.Scene {
         duration: 500,
         onComplete: () => icon.destroy(),
       });
+    });
+  }
+
+  // ============================================================
+  // Phase 2 点击与任务交互增强
+  // ============================================================
+
+  private playGreetEffect(agent: AgentCharacter) {
+    if (agent.isMoving) return;
+
+    // turn to face down (toward camera/user)
+    agent.facing = 'down';
+    this.playAgentAnimation(agent, 'idle', 'down');
+
+    // small hop
+    this.tweens.add({
+      targets: agent.sprite,
+      y: agent.sprite.y - 8,
+      duration: 150,
+      ease: 'Quad.Out',
+      yoyo: true,
+    });
+
+    // wave emoji
+    const wave = this.add.text(12, -100, '👋', { fontSize: '16px' });
+    wave.setOrigin(0.5);
+    agent.container.add(wave);
+
+    this.tweens.add({
+      targets: wave,
+      y: wave.y - 20,
+      alpha: { from: 1, to: 0 },
+      duration: 1000,
+      ease: 'Power2',
+      onComplete: () => wave.destroy(),
+    });
+  }
+
+  private playReceiveTaskEffect(agent: AgentCharacter) {
+    if (agent.isMoving) return;
+
+    // excited hop
+    this.tweens.add({
+      targets: agent.sprite,
+      y: agent.sprite.y - 10,
+      duration: 120,
+      ease: 'Quad.Out',
+      yoyo: true,
+      onComplete: () => {
+        // second smaller hop
+        this.tweens.add({
+          targets: agent.sprite,
+          y: agent.sprite.y - 4,
+          duration: 100,
+          ease: 'Quad.Out',
+          yoyo: true,
+        });
+      },
+    });
+
+    // show "!" accept indicator
+    const excl = this.add.text(0, -112, '📋', { fontSize: '14px' });
+    excl.setOrigin(0.5);
+    agent.container.add(excl);
+
+    this.tweens.add({
+      targets: excl,
+      y: excl.y - 25,
+      alpha: { from: 1, to: 0 },
+      duration: 900,
+      ease: 'Power2',
+      onComplete: () => excl.destroy(),
     });
   }
 
