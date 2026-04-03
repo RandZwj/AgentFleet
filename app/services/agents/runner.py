@@ -123,7 +123,9 @@ async def run_agent(
 
         if not tool_calls:
             final_content = agent_result["content"]
+            log.info("[%s] 第%d轮: LLM 未返回 tool_calls, 直接返回文本 (len=%d)", agent_name, _round + 1, len(final_content))
             break
+        log.info("[%s] 第%d轮: LLM 返回 %d 个 tool_calls: %s", agent_name, _round + 1, len(tool_calls), [tc.get("function", {}).get("name") for tc in tool_calls])
 
         if not used_tools:
             used_tools = True
@@ -251,7 +253,9 @@ async def run_agent_stream(
         tool_calls = agent_result.get("tool_calls")
 
         if not tool_calls:
+            log.info("[%s][stream] 第%d轮: LLM 未返回 tool_calls, 直接返回文本", agent_name, _round + 1)
             break
+        log.info("[%s][stream] 第%d轮: LLM 返回 %d 个 tool_calls: %s", agent_name, _round + 1, len(tool_calls), [tc.get("function", {}).get("name") for tc in tool_calls])
 
         # 首次使用工具 → 推送 process 事件
         if not used_tools:

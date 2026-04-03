@@ -4,8 +4,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-import httpx
-
 from app.services.product_search import (
     compare_products,
     get_category_stats,
@@ -153,11 +151,15 @@ def execute_designer_tool(func_name: str, args: Dict[str, Any]) -> Any:
     """执行平面设计师工具。"""
     try:
         if func_name == "generate_image":
-            return generate_image(
+            log.info(">>> generate_image 被调用, prompt=%s, size=%s", args.get("prompt", "")[:80], args.get("size"))
+            from app.services.image_service import generate_image
+            result = generate_image(
                 prompt=args["prompt"],
                 size=args.get("size", "1024x1024"),
                 style=args.get("style", "vivid"),
             )
+            log.info(">>> generate_image 结果: %s", {k: (v[:60] + '...' if isinstance(v, str) and len(v) > 60 else v) for k, v in result.items()})
+            return result
         elif func_name == "search_products":
             return search_products(
                 keyword=args.get("keyword"),
@@ -173,141 +175,6 @@ def execute_designer_tool(func_name: str, args: Dict[str, Any]) -> Any:
     except Exception as e:
         log.error("设计工具执行失败: %s — %s", func_name, e)
         return {"error": str(e)}
-
-
-def _size_to_aspect_ratio(size: str) -> str:
-    mapping = {
-        "1024x1024": "1:1",
-        "1024x1536": "2:3",
-        "1536x1024": "3:2",
-        "1024x1792": "9:16",
-        "1792x1024": "16:9",
-    }
-    return mapping.get(size, "1:1")
-
-
-def _extract_image_url(payload: Dict[str, Any]) -> str | None:
-    data = payload.get("data")
-    if isinstance(data, dict):
-        if data.get("image_url"):
-            return data["image_url"]
-        if isinstance(data.get("image_urls"), list) and data["image_urls"]:
-            return data["image_urls"][0]
-        if isinstance(data.get("images"), list) and data["images"]:
-            first = data["images"][0]
-            if isinstance(first, dict):
-                return first.get("url")
-    elif isinstance(data, list) and data:
-        first = data[0]
-        if isinstance(first, str):
-            return first
-        if isinstance(first, dict):
-            return first.get("url") or first.get("image_url")
-    return None
-
-
-def _extract_minimax_error(payload: Dict[str, Any]) -> str | None:
-    base_resp = payload.get("base_resp")
-    if isinstance(base_resp, dict):
-        status_code = base_resp.get("status_code")
-        status_msg = base_resp.get("status_msg")
-        if status_code not in (None, 0):
-            return str(status_msg or f"status_code={status_code}")
-    return None
-
-
-def generate_image(prompt: str, size: str = "1024x1024", style: str = "vivid") -> Dict[str, Any]:
-    """优先调用 MiniMax 图片生成，回退到 OpenAI DALL-E。"""
-    from app.config import settings
-
-    if settings.minimax_api_key:
-        try:
-            response = httpx.post(
-                "https://api.minimax.io/v1/image_generation",
-                headers={"Authorization": f"Bearer {settings.minimax_api_key}"},
-                json={
-                    "model": "image-01",
-                    "prompt": prompt,
-                    "aspect_ratio": _size_to_aspect_ratio(size),
-                    "response_format": "url",
-                    "n": 1,
-                },
-                timeout=90.0,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            minimax_error = _extract_minimax_error(payload)
-            if minimax_error:
-                if "invalid api key" in minimax_error.lower():
-                    return {
-                        "error": (
-                            "当前配置的 MiniMax key 无法调用图片生成接口。"
-                            "这类 key 可以用于文本模型，但图片生成需要可访问 "
-                            "`/v1/image_generation` 的 MiniMax 图片 API key，"
-                            "或者改用 OPENAI_API_KEY 作为兜底。"
-                        ),
-                        "fallback": "design_description",
-                        "prompt_used": prompt,
-                        "provider": "minimax",
-                    }
-                return {
-                    "error": f"MiniMax 图片生成失败: {minimax_error}",
-                    "fallback": "design_description",
-                    "prompt_used": prompt,
-                    "provider": "minimax",
-                }
-            image_url = _extract_image_url(payload)
-            if image_url:
-                return {
-                    "image_url": image_url,
-                    "model": "MiniMax image-01",
-                    "prompt_used": prompt,
-                    "size": size,
-                    "style": style,
-                }
-            return {
-                "error": "MiniMax 图片生成接口返回成功，但未解析到图片地址。",
-                "fallback": "design_description",
-                "prompt_used": prompt,
-                "provider": "minimax",
-            }
-        except Exception as e:
-            log.warning("MiniMax 图片生成失败，尝试回退 OpenAI: %s", e)
-
-    try:
-        import openai
-
-        if not settings.openai_api_key:
-            return {
-                "error": "当前未配置可用的图片生成模型。请设置 MINIMAX_API_KEY 或 OPENAI_API_KEY。",
-                "fallback": "design_description",
-                "prompt_used": prompt,
-            }
-
-        client = openai.OpenAI(api_key=settings.openai_api_key)
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            size=size,
-            style=style,
-            n=1,
-        )
-        image_url = response.data[0].url
-        revised_prompt = response.data[0].revised_prompt
-
-        return {
-            "image_url": image_url,
-            "revised_prompt": revised_prompt,
-            "model": "OpenAI dall-e-3",
-            "size": size,
-            "style": style,
-        }
-    except Exception as e:
-        return {
-            "error": f"图片生成失败: {str(e)}",
-            "fallback": "design_description",
-            "prompt_used": prompt,
-        }
 
 
 def execute_dashboard_tool(func_name: str, args: Dict[str, Any]) -> Any:

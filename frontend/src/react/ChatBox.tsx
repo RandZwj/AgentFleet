@@ -70,8 +70,32 @@ function parseMarkdownContent(content: string): React.ReactNode[] {
   };
 
   while (i < lines.length) {
-    if (
-      lines[i].includes('|') &&
+    const trimmedLine = lines[i].trim();
+
+    // --- horizontal rule
+    if (/^-{3,}$/.test(trimmedLine) || /^\*{3,}$/.test(trimmedLine)) {
+      flushText();
+      result.push(
+        <hr key={`hr-${result.length}`} style={{ border: 'none', borderTop: '1px solid #444', margin: '10px 0' }} />,
+      );
+      i++;
+    }
+    // ### heading
+    else if (/^#{1,4}\s/.test(trimmedLine)) {
+      flushText();
+      const level = trimmedLine.match(/^(#+)/)?.[1].length || 3;
+      const headingText = trimmedLine.replace(/^#+\s*/, '');
+      const fontSize = level <= 2 ? 16 : 14;
+      result.push(
+        <div key={`h-${result.length}`} style={{ fontSize, fontWeight: 'bold', color: '#ffd700', margin: '10px 0 4px' }}>
+          {formatInlineMarkdown(headingText)}
+        </div>,
+      );
+      i++;
+    }
+    // table
+    else if (
+      trimmedLine.includes('|') &&
       i + 1 < lines.length &&
       /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())
     ) {
@@ -127,7 +151,8 @@ function parseTableRow(line: string): string[] {
 
 function formatInlineMarkdown(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const regex = /(\*\*(.+?)\*\*|`([^`]+)`)/g;
+  // Order: images first, then links, bold, inline code
+  const regex = /(!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -135,12 +160,40 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
-    if (match[2]) {
-      parts.push(<strong key={`b-${match.index}`}>{match[2]}</strong>);
-    } else if (match[3]) {
+    if (match[2] !== undefined && match[3]) {
+      // ![alt](url) → image
+      parts.push(
+        <a key={`img-${match.index}`} href={match[3]} target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '8px 0' }}>
+          <img
+            src={match[3]}
+            alt={match[2] || '图片'}
+            style={{ maxWidth: '100%', borderRadius: 6, border: '1px solid #444', cursor: 'pointer' }}
+            onError={(e) => {
+              const el = e.currentTarget;
+              el.style.display = 'none';
+              const fallback = el.parentElement?.querySelector('.img-fallback') as HTMLElement;
+              if (fallback) fallback.style.display = 'block';
+            }}
+          />
+          <span className="img-fallback" style={{ display: 'none', color: '#888', fontSize: 12 }}>
+            图片加载失败，<span style={{ color: '#60a5fa', textDecoration: 'underline' }}>点击查看</span>
+          </span>
+        </a>,
+      );
+    } else if (match[4] && match[5]) {
+      // [text](url) → link
+      parts.push(
+        <a key={`a-${match.index}`} href={match[5]} target="_blank" rel="noopener noreferrer"
+          style={{ color: '#60a5fa', textDecoration: 'underline', wordBreak: 'break-all' }}>
+          {match[4]}
+        </a>,
+      );
+    } else if (match[6]) {
+      parts.push(<strong key={`b-${match.index}`}>{match[6]}</strong>);
+    } else if (match[7]) {
       parts.push(
         <code key={`c-${match.index}`} style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3 }}>
-          {match[3]}
+          {match[7]}
         </code>,
       );
     }
@@ -1481,6 +1534,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     lineHeight: '1.6',
     whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'break-word' as const,
+    wordBreak: 'break-word' as const,
+    overflow: 'hidden',
   },
   mentionMenu: {
     padding: '6px',
