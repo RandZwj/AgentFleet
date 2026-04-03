@@ -46,6 +46,28 @@ interface RoomDef {
   anchors: Anchor[];
 }
 
+// ============================================================
+// 工位椅子坐标（tile 坐标，由地图标注确认）
+// 如需新增/修改工位，只需编辑此数组
+// tileX/tileY 为可通行格子坐标，facing 为面朝电脑方向
+// ============================================================
+const WORKSTATION_TILES: Array<{ tileX: number; tileY: number; facing: Direction }> = [
+  { tileX: 10, tileY: 9, facing: 'down' },
+  { tileX: 13, tileY: 9, facing: 'down' },
+  { tileX: 10, tileY: 12, facing: 'up' },
+  { tileX: 13, tileY: 12, facing: 'up' },
+  { tileX: 2, tileY: 9, facing: 'left' },
+  { tileX: 2, tileY: 14, facing: 'up' },
+  { tileX: 6, tileY: 4, facing: 'down' },
+  { tileX: 11, tileY: 17, facing: 'down' },
+  { tileX: 16, tileY: 18, facing: 'up' },
+  { tileX: 27, tileY: 13, facing: 'up' },
+];
+
+function tileToPixel(tileX: number, tileY: number) {
+  return { x: tileX * 32 + 16, y: tileY * 32 + 16 };
+}
+
 const ROOMS: Record<string, RoomDef> = {
   showroom: {
     label: '商品展厅',
@@ -63,9 +85,9 @@ const ROOMS: Record<string, RoomDef> = {
     label: '调度中心',
     entry: { x: 464, y: 208 },
     anchors: [
-      { x: 464, y: 112, facing: 'up', type: 'desk' },
-      { x: 528, y: 112, facing: 'up', type: 'desk' },
-      { x: 592, y: 112, facing: 'up', type: 'desk' },
+      { x: 464, y: 112, facing: 'up', type: 'stand' },
+      { x: 528, y: 112, facing: 'up', type: 'stand' },
+      { x: 592, y: 112, facing: 'up', type: 'stand' },
       { x: 464, y: 176, facing: 'down', type: 'stand' },
       { x: 528, y: 176, facing: 'down', type: 'stand' },
       { x: 592, y: 176, facing: 'down', type: 'stand' },
@@ -87,22 +109,31 @@ const ROOMS: Record<string, RoomDef> = {
     label: '待命区',
     entry: { x: 336, y: 272 },
     anchors: [
-      { x: 272, y: 256, facing: 'down', type: 'stand' },
-      { x: 336, y: 256, facing: 'down', type: 'stand' },
-      { x: 400, y: 256, facing: 'down', type: 'stand' },
-      { x: 272, y: 304, facing: 'down', type: 'stand' },
-      { x: 336, y: 304, facing: 'down', type: 'stand' },
-      { x: 400, y: 304, facing: 'down', type: 'stand' },
+      { x: 272, y: 272, facing: 'down', type: 'stand' },
+      { x: 336, y: 272, facing: 'down', type: 'stand' },
+      { x: 400, y: 272, facing: 'down', type: 'stand' },
+      { x: 464, y: 272, facing: 'down', type: 'stand' },
+      { x: 528, y: 272, facing: 'down', type: 'stand' },
+      { x: 592, y: 272, facing: 'down', type: 'stand' },
     ],
+  },
+  office: {
+    label: '开放办公区',
+    entry: { x: 336, y: 272 },
+    anchors: WORKSTATION_TILES.map((w) => ({
+      ...tileToPixel(w.tileX, w.tileY),
+      facing: w.facing,
+      type: 'desk' as const,
+    })),
   },
   datacenter: {
     label: '数据仓库',
     entry: { x: 720, y: 176 },
     anchors: [
-      { x: 752, y: 112, facing: 'right', type: 'desk' },
-      { x: 752, y: 144, facing: 'right', type: 'desk' },
-      { x: 848, y: 112, facing: 'up', type: 'screen' },
-      { x: 848, y: 144, facing: 'up', type: 'screen' },
+      { x: 752, y: 112, facing: 'right', type: 'stand' },
+      { x: 752, y: 144, facing: 'right', type: 'stand' },
+      { x: 848, y: 112, facing: 'up', type: 'stand' },
+      { x: 848, y: 144, facing: 'up', type: 'stand' },
       { x: 720, y: 112, facing: 'down', type: 'stand' },
       { x: 720, y: 176, facing: 'down', type: 'stand' },
     ],
@@ -903,9 +934,10 @@ export class OfficeScene extends Phaser.Scene {
 
     this.stopIdleMotion(agent);
     this.playAgentAnimation(agent, 'idle');
+    agent.sprite.y = 8;
     agent.workTween = this.tweens.add({
       targets: agent.sprite,
-      y: { from: 0, to: -2 },
+      y: { from: 8, to: 6 },
       angle: { from: -1, to: 1 },
       duration: 350,
       ease: 'Sine.InOut',
