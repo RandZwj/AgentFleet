@@ -33,72 +33,78 @@ const VISIBLE_TILE_LAYERS = [
 // 坐标直接使用像素值 (tileX*32+16, tileY*32+16)
 // ============================================================
 
-const ROOMS: Record<
-  string,
-  {
-    label: string;
-    entry: { x: number; y: number };
-    spots: { x: number; y: number }[];
-  }
-> = {
+interface Anchor {
+  x: number;
+  y: number;
+  facing: Direction;
+  type: 'desk' | 'stand' | 'meeting' | 'screen';
+}
+
+interface RoomDef {
+  label: string;
+  entry: { x: number; y: number };
+  anchors: Anchor[];
+}
+
+const ROOMS: Record<string, RoomDef> = {
   showroom: {
     label: '商品展厅',
     entry: { x: 304, y: 208 },
-    spots: [
-      { x: 208, y: 80 },
-      { x: 272, y: 80 },
-      { x: 336, y: 80 },
-      { x: 208, y: 144 },
-      { x: 272, y: 144 },
-      { x: 336, y: 144 },
+    anchors: [
+      { x: 176, y: 160, facing: 'up', type: 'desk' },
+      { x: 240, y: 160, facing: 'up', type: 'desk' },
+      { x: 304, y: 160, facing: 'up', type: 'desk' },
+      { x: 176, y: 192, facing: 'down', type: 'stand' },
+      { x: 240, y: 192, facing: 'down', type: 'stand' },
+      { x: 304, y: 192, facing: 'down', type: 'stand' },
     ],
   },
   manager: {
     label: '调度中心',
     entry: { x: 464, y: 208 },
-    spots: [
-      { x: 432, y: 80 },
-      { x: 528, y: 80 },
-      { x: 624, y: 80 },
-      { x: 432, y: 144 },
-      { x: 528, y: 144 },
-      { x: 624, y: 144 },
+    anchors: [
+      { x: 464, y: 112, facing: 'up', type: 'desk' },
+      { x: 528, y: 112, facing: 'up', type: 'desk' },
+      { x: 592, y: 112, facing: 'up', type: 'desk' },
+      { x: 464, y: 176, facing: 'down', type: 'stand' },
+      { x: 528, y: 176, facing: 'down', type: 'stand' },
+      { x: 592, y: 176, facing: 'down', type: 'stand' },
     ],
   },
   meeting: {
     label: '协作室',
     entry: { x: 304, y: 368 },
-    spots: [
-      { x: 240, y: 400 },
-      { x: 304, y: 400 },
-      { x: 368, y: 400 },
-      { x: 240, y: 432 },
-      { x: 304, y: 432 },
-      { x: 368, y: 432 },
+    anchors: [
+      { x: 240, y: 368, facing: 'right', type: 'meeting' },
+      { x: 368, y: 368, facing: 'left', type: 'meeting' },
+      { x: 240, y: 432, facing: 'right', type: 'meeting' },
+      { x: 368, y: 432, facing: 'left', type: 'meeting' },
+      { x: 304, y: 400, facing: 'down', type: 'stand' },
+      { x: 304, y: 448, facing: 'up', type: 'stand' },
     ],
   },
   workspace: {
     label: '待命区',
-    entry: { x: 336, y: 240 },
-    spots: [
-      { x: 240, y: 240 },
-      { x: 336, y: 240 },
-      { x: 432, y: 240 },
-      { x: 240, y: 272 },
-      { x: 336, y: 272 },
-      { x: 432, y: 272 },
+    entry: { x: 336, y: 272 },
+    anchors: [
+      { x: 272, y: 256, facing: 'down', type: 'stand' },
+      { x: 336, y: 256, facing: 'down', type: 'stand' },
+      { x: 400, y: 256, facing: 'down', type: 'stand' },
+      { x: 272, y: 304, facing: 'down', type: 'stand' },
+      { x: 336, y: 304, facing: 'down', type: 'stand' },
+      { x: 400, y: 304, facing: 'down', type: 'stand' },
     ],
   },
   datacenter: {
     label: '数据仓库',
     entry: { x: 720, y: 336 },
-    spots: [
-      { x: 784, y: 272 },
-      { x: 848, y: 272 },
-      { x: 784, y: 304 },
-      { x: 848, y: 304 },
-      { x: 784, y: 336 },
-      { x: 848, y: 336 },
+    anchors: [
+      { x: 784, y: 272, facing: 'up', type: 'screen' },
+      { x: 848, y: 272, facing: 'up', type: 'screen' },
+      { x: 784, y: 336, facing: 'up', type: 'desk' },
+      { x: 848, y: 336, facing: 'up', type: 'desk' },
+      { x: 784, y: 400, facing: 'down', type: 'stand' },
+      { x: 848, y: 400, facing: 'down', type: 'stand' },
     ],
   },
 };
@@ -159,6 +165,7 @@ interface AgentCharacter {
   facing: Direction;
   homeRoom: string;
   currentRoom: string;
+  currentAnchor?: Anchor;
   bubbleContainer?: Phaser.GameObjects.Container;
   bubbleTimer?: Phaser.Time.TimerEvent;
   idleTween?: Phaser.Tweens.Tween;
@@ -296,14 +303,12 @@ export class OfficeScene extends Phaser.Scene {
 
     this.createAnimationsForSprite(spriteKey);
 
-    const room = getRoom(homeRoom);
-    const usedCount = this.agents.filter((a) => a.currentRoom === homeRoom).length;
-    const spotIndex = usedCount % room.spots.length;
-    const pos = room.spots[spotIndex];
+    const anchor = this.findFreeAnchor(homeRoom);
+    if (!anchor) return;
 
-    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL.down));
+    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL[anchor.facing]));
     sprite.setOrigin(0.5, 1);
-    sprite.play(`${spriteKey}-idle-down`);
+    sprite.play(`${spriteKey}-idle-${anchor.facing}`);
 
     const nameTag = this.add.text(0, -100, data.displayName, {
       fontFamily: 'monospace',
@@ -315,8 +320,8 @@ export class OfficeScene extends Phaser.Scene {
     });
     nameTag.setOrigin(0.5);
 
-    const container = this.add.container(pos.x, pos.y, [sprite, nameTag]);
-    container.setDepth(pos.y);
+    const container = this.add.container(anchor.x, anchor.y, [sprite, nameTag]);
+    container.setDepth(anchor.y);
     container.setSize(48, 96);
     container.setInteractive({ useHandCursor: true });
 
@@ -335,9 +340,10 @@ export class OfficeScene extends Phaser.Scene {
       spriteKey,
       color,
       isMoving: false,
-      facing: 'down',
+      facing: anchor.facing,
       homeRoom,
       currentRoom: homeRoom,
+      currentAnchor: anchor,
     });
 
     this.startIdleMotion(this.agents[this.agents.length - 1]);
@@ -494,29 +500,47 @@ export class OfficeScene extends Phaser.Scene {
   // ============================================================
   // 移动 Agent
   // ============================================================
+  private findFreeAnchor(roomId: string, excludeAgentId?: string, preferWork = false): Anchor | null {
+    const room = getRoom(roomId);
+    const occupiedPositions = new Set(
+      this.agents
+        .filter((a) => a.currentRoom === roomId && a.agentId !== excludeAgentId && a.currentAnchor)
+        .map((a) => `${a.currentAnchor!.x},${a.currentAnchor!.y}`),
+    );
+    const free = room.anchors.filter((a) => !occupiedPositions.has(`${a.x},${a.y}`));
+    if (free.length === 0) return room.anchors[0];
+    if (preferWork) {
+      const workAnchor = free.find((a) => a.type === 'desk' || a.type === 'screen');
+      if (workAnchor) return workAnchor;
+    }
+    return free[0];
+  }
+
   public moveAgentToRoom(agentId: string, roomId: string) {
     const agent = this.agents.find((a) => a.agentId === agentId);
     if (!agent || agent.isMoving) return;
 
-    const targetRoom = getRoom(roomId);
-    const usedSpots = this.agents
-      .filter((a) => a.currentRoom === roomId && a.agentId !== agentId)
-      .length;
-    const spotIndex = usedSpots % targetRoom.spots.length;
-    const targetPoint = targetRoom.spots[spotIndex];
+    const isWorkTrip = roomId !== agent.homeRoom;
+    const anchor = this.findFreeAnchor(roomId, agentId, isWorkTrip);
+    if (!anchor) return;
+
     const cleanPath = this.buildWorldPath(
       { x: agent.container.x, y: agent.container.y },
-      targetPoint,
+      { x: anchor.x, y: anchor.y },
     );
 
     agent.currentRoom = roomId;
+    agent.currentAnchor = anchor;
     this.stopIdleMotion(agent);
-    this.moveAlongPath(agent, cleanPath, 0);
+    this.moveAlongPath(agent, cleanPath, 0, anchor.facing);
   }
 
-  private moveAlongPath(agent: AgentCharacter, path: { x: number; y: number }[], index: number) {
+  private moveAlongPath(agent: AgentCharacter, path: { x: number; y: number }[], index: number, arrivalFacing?: Direction) {
     if (index >= path.length) {
       agent.isMoving = false;
+      if (arrivalFacing) {
+        agent.facing = arrivalFacing;
+      }
       this.playAgentAnimation(agent, 'idle');
       this.stopWorkingMotion(agent);
       this.startIdleMotion(agent);
@@ -529,7 +553,7 @@ export class OfficeScene extends Phaser.Scene {
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance < 4) {
-      this.moveAlongPath(agent, path, index + 1);
+      this.moveAlongPath(agent, path, index + 1, arrivalFacing);
       return;
     }
 
@@ -552,7 +576,7 @@ export class OfficeScene extends Phaser.Scene {
         agent.container.setDepth(agent.container.y);
       },
       onComplete: () => {
-        this.moveAlongPath(agent, path, index + 1);
+        this.moveAlongPath(agent, path, index + 1, arrivalFacing);
       },
     });
   }
@@ -591,18 +615,13 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private createAgents() {
-    const roomSpotCounter: Record<string, number> = {};
-
     this.agentSpawns.forEach((spawn) => {
-      const room = getRoom(spawn.homeRoom);
-      const usedCount = roomSpotCounter[spawn.homeRoom] || 0;
-      const spotIndex = usedCount % room.spots.length;
-      roomSpotCounter[spawn.homeRoom] = usedCount + 1;
-      const pos = room.spots[spotIndex];
+      const anchor = this.findFreeAnchor(spawn.homeRoom);
+      if (!anchor) return;
 
-      const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL.down));
+      const sprite = this.add.sprite(0, 0, spawn.spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL[anchor.facing]));
       sprite.setOrigin(0.5, 1);
-      sprite.play(`${spawn.spriteKey}-idle-down`);
+      sprite.play(`${spawn.spriteKey}-idle-${anchor.facing}`);
 
       const nameTag = this.add.text(0, -100, spawn.name, {
         fontFamily: 'monospace',
@@ -614,8 +633,8 @@ export class OfficeScene extends Phaser.Scene {
       });
       nameTag.setOrigin(0.5);
 
-      const container = this.add.container(pos.x, pos.y, [sprite, nameTag]);
-      container.setDepth(pos.y);
+      const container = this.add.container(anchor.x, anchor.y, [sprite, nameTag]);
+      container.setDepth(anchor.y);
       container.setSize(48, 96);
       container.setInteractive({ useHandCursor: true });
 
@@ -634,9 +653,10 @@ export class OfficeScene extends Phaser.Scene {
         spriteKey: spawn.spriteKey,
         color: spawn.color,
         isMoving: false,
-        facing: 'down',
+        facing: anchor.facing,
         homeRoom: spawn.homeRoom,
         currentRoom: spawn.homeRoom,
+        currentAnchor: anchor,
       });
 
       this.startIdleMotion(this.agents[this.agents.length - 1]);
