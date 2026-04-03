@@ -222,6 +222,8 @@ interface AgentCharacter {
   statusIndicator?: Phaser.GameObjects.Container;
   statusDotTween?: Phaser.Tweens.Tween;
   idleWalkTimer?: Phaser.Time.TimerEvent;
+  thinkingIndicator?: Phaser.GameObjects.Container;
+  thinkingTween?: Phaser.Tweens.Tween;
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -318,13 +320,15 @@ export class OfficeScene extends Phaser.Scene {
     this.showAgentBubble(data.agentSlug, data.text, data.duration);
   }
 
-  private onAgentStatusChange(data: { agentSlug: string; status: 'idle' | 'working' | 'standby' }) {
+  private onAgentStatusChange(data: { agentSlug: string; status: 'idle' | 'working' | 'standby' | 'error' }) {
     const agent = this.agents.find((a) => a.slug === data.agentSlug);
     if (!agent) return;
 
     if (data.status === 'working') {
       agent.workStatus = 'working';
+      this.showThinkingIndicator(agent);
       if (!agent.isMoving && this.isAtWorkAnchor(agent)) {
+        this.hideThinkingIndicator(agent);
         this.stopIdleMotion(agent);
         this.startWorkingMotion(agent);
         this.showWorkingIndicator(agent);
@@ -335,6 +339,8 @@ export class OfficeScene extends Phaser.Scene {
     if (data.status === 'idle') {
       const wasWorking = agent.workStatus === 'working';
       agent.workStatus = 'idle';
+
+      this.hideThinkingIndicator(agent);
 
       if (agent.workTimer) {
         agent.workTimer.destroy();
@@ -362,8 +368,15 @@ export class OfficeScene extends Phaser.Scene {
       return;
     }
 
+    if (data.status === 'error') {
+      this.hideThinkingIndicator(agent);
+      this.showErrorEffect(agent);
+      return;
+    }
+
     if (data.status === 'standby') {
       agent.workStatus = 'idle';
+      this.hideThinkingIndicator(agent);
       this.stopWorkingMotion(agent);
       this.hideWorkingIndicator(agent);
       this.stopIdleMotion(agent);
@@ -446,6 +459,8 @@ export class OfficeScene extends Phaser.Scene {
     if (agent.workTween) { agent.workTween.stop(); }
     if (agent.statusDotTween) { agent.statusDotTween.stop(); }
     if (agent.statusIndicator) { agent.statusIndicator.destroy(); }
+    if (agent.thinkingTween) { agent.thinkingTween.stop(); }
+    if (agent.thinkingIndicator) { agent.thinkingIndicator.destroy(); }
     agent.container.destroy();
     this.agents.splice(idx, 1);
   }
@@ -688,6 +703,7 @@ export class OfficeScene extends Phaser.Scene {
       this.playAgentAnimation(agent, 'idle');
 
       if (agent.workStatus === 'working' && this.isAtWorkAnchor(agent)) {
+        this.hideThinkingIndicator(agent);
         this.startWorkingMotion(agent);
         this.showWorkingIndicator(agent);
         if (agent.pendingMoveRoom) {
@@ -844,6 +860,7 @@ export class OfficeScene extends Phaser.Scene {
     const agent = this.agents.find((a) => a.slug === agentSlug);
     if (!agent || !text || !text.trim()) return;
 
+    this.playSpeakingPulse(agent);
     this.hideAgentBubble(agent);
 
     const displayText = text.length > 40 ? text.slice(0, 37) + '...' : text;
@@ -1069,17 +1086,105 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private showCompletionEffect(agent: AgentCharacter) {
-    const check = this.add.text(0, -112, '✅', { fontSize: '14px' });
-    check.setOrigin(0.5);
-    agent.container.add(check);
+    const cx = 0;
+    const cy = -112;
+    const count = 6;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = Phaser.Math.Between(18, 35);
+      const star = this.add.text(cx, cy, '✨', { fontSize: `${Phaser.Math.Between(10, 16)}px` });
+      star.setOrigin(0.5);
+      agent.container.add(star);
 
+      this.tweens.add({
+        targets: star,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist - 10,
+        alpha: { from: 1, to: 0 },
+        scaleX: { from: 1, to: 0.3 },
+        scaleY: { from: 1, to: 0.3 },
+        duration: Phaser.Math.Between(600, 1000),
+        ease: 'Power2',
+        onComplete: () => star.destroy(),
+      });
+    }
+  }
+
+  // ============================================================
+  // Phase 1 状态可读性：thinking / speaking / error
+  // ============================================================
+
+  private showThinkingIndicator(agent: AgentCharacter) {
+    if (agent.thinkingIndicator) return;
+
+    const dots = this.add.text(0, 0, '💭', { fontSize: '16px' });
+    dots.setOrigin(0.5);
+
+    const container = this.add.container(0, -116, [dots]);
+    agent.container.add(container);
+    agent.thinkingIndicator = container;
+
+    agent.thinkingTween = this.tweens.add({
+      targets: dots,
+      alpha: { from: 1, to: 0.3 },
+      scaleX: { from: 1, to: 0.75 },
+      scaleY: { from: 1, to: 0.75 },
+      y: { from: 0, to: -3 },
+      duration: 800,
+      ease: 'Sine.InOut',
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private hideThinkingIndicator(agent: AgentCharacter) {
+    if (agent.thinkingTween) {
+      agent.thinkingTween.stop();
+      agent.thinkingTween = undefined;
+    }
+    if (agent.thinkingIndicator) {
+      agent.thinkingIndicator.destroy();
+      agent.thinkingIndicator = undefined;
+    }
+  }
+
+  private playSpeakingPulse(agent: AgentCharacter) {
+    if (agent.isMoving) return;
     this.tweens.add({
-      targets: check,
-      y: check.y - 30,
-      alpha: { from: 1, to: 0 },
-      duration: 1200,
-      ease: 'Power2',
-      onComplete: () => check.destroy(),
+      targets: agent.sprite,
+      scaleX: { from: 1, to: 1.08 },
+      scaleY: { from: 1, to: 1.06 },
+      duration: 120,
+      ease: 'Quad.Out',
+      yoyo: true,
+    });
+  }
+
+  private showErrorEffect(agent: AgentCharacter) {
+    const icon = this.add.text(0, -112, '❗', { fontSize: '16px' });
+    icon.setOrigin(0.5);
+    agent.container.add(icon);
+
+    // shake the sprite
+    const origX = agent.sprite.x;
+    this.tweens.add({
+      targets: agent.sprite,
+      x: origX + 2,
+      duration: 50,
+      yoyo: true,
+      repeat: 5,
+      onComplete: () => { agent.sprite.x = origX; },
+    });
+
+    // icon stays then fades
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: icon,
+        alpha: 0,
+        y: icon.y - 15,
+        duration: 500,
+        onComplete: () => icon.destroy(),
+      });
     });
   }
 

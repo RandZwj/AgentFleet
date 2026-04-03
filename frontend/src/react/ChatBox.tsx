@@ -149,10 +149,33 @@ function parseTableRow(line: string): string[] {
     .map((c) => c.trim());
 }
 
+const IMAGE_URL_RE = /\.(jpe?g|png|gif|webp|bmp|svg)(\?[^\s]*)?$/i;
+
+function renderImageNode(url: string, alt: string, keyPrefix: string, idx: number): React.ReactNode {
+  return (
+    <a key={`${keyPrefix}-${idx}`} href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '8px 0' }}>
+      <img
+        src={url}
+        alt={alt || '图片'}
+        style={{ maxWidth: '100%', borderRadius: 6, border: '1px solid #444', cursor: 'pointer' }}
+        onError={(e) => {
+          const el = e.currentTarget;
+          el.style.display = 'none';
+          const fallback = el.parentElement?.querySelector('[data-fallback]') as HTMLElement;
+          if (fallback) fallback.style.display = 'block';
+        }}
+      />
+      <span data-fallback="" style={{ display: 'none', color: '#888', fontSize: 12 }}>
+        图片加载失败，<span style={{ color: '#60a5fa', textDecoration: 'underline' }}>点击查看原图</span>
+      </span>
+    </a>
+  );
+}
+
 function formatInlineMarkdown(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  // Order: images first, then links, bold, inline code
-  const regex = /(!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`)/g;
+  // Match: markdown images, markdown links, bare URLs, bold, inline code
+  const regex = /(!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s<>"']+)|\*\*(.+?)\*\*|`([^`]+)`)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -162,24 +185,7 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
     }
     if (match[2] !== undefined && match[3]) {
       // ![alt](url) → image
-      parts.push(
-        <a key={`img-${match.index}`} href={match[3]} target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '8px 0' }}>
-          <img
-            src={match[3]}
-            alt={match[2] || '图片'}
-            style={{ maxWidth: '100%', borderRadius: 6, border: '1px solid #444', cursor: 'pointer' }}
-            onError={(e) => {
-              const el = e.currentTarget;
-              el.style.display = 'none';
-              const fallback = el.parentElement?.querySelector('.img-fallback') as HTMLElement;
-              if (fallback) fallback.style.display = 'block';
-            }}
-          />
-          <span className="img-fallback" style={{ display: 'none', color: '#888', fontSize: 12 }}>
-            图片加载失败，<span style={{ color: '#60a5fa', textDecoration: 'underline' }}>点击查看</span>
-          </span>
-        </a>,
-      );
+      parts.push(renderImageNode(match[3], match[2], 'mdimg', match.index));
     } else if (match[4] && match[5]) {
       // [text](url) → link
       parts.push(
@@ -189,11 +195,29 @@ function formatInlineMarkdown(text: string): React.ReactNode[] {
         </a>,
       );
     } else if (match[6]) {
-      parts.push(<strong key={`b-${match.index}`}>{match[6]}</strong>);
+      // bare URL → auto-detect image or link
+      const url = match[6].replace(/[).,;:!?]+$/, '');
+      if (IMAGE_URL_RE.test(url)) {
+        parts.push(renderImageNode(url, '图片', 'urlimg', match.index));
+      } else {
+        const display = url.length > 60 ? url.slice(0, 57) + '...' : url;
+        parts.push(
+          <a key={`url-${match.index}`} href={url} target="_blank" rel="noopener noreferrer"
+            style={{ color: '#60a5fa', textDecoration: 'underline', wordBreak: 'break-all' }}>
+            {display}
+          </a>,
+        );
+      }
+      const consumed = url.length;
+      if (consumed < match[6].length) {
+        parts.push(match[6].slice(consumed));
+      }
     } else if (match[7]) {
+      parts.push(<strong key={`b-${match.index}`}>{match[7]}</strong>);
+    } else if (match[8]) {
       parts.push(
         <code key={`c-${match.index}`} style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3 }}>
-          {match[7]}
+          {match[8]}
         </code>,
       );
     }
@@ -633,6 +657,12 @@ export const ChatBox: React.FC = () => {
             break;
 
           case 'error':
+            if (event.data.agent_slug) {
+              EventBus.emit('agent:status', { agentSlug: event.data.agent_slug, status: 'error' });
+            }
+            for (const slug of activeAgentSlugs) {
+              EventBus.emit('agent:status', { agentSlug: slug, status: 'idle' });
+            }
             addMessage({
               role: 'system',
               content: event.data.content || '调度员暂时无法响应',

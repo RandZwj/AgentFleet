@@ -513,7 +513,7 @@
 
 ## 9. 分阶段落地计划
 
-### Phase 1：状态可读性增强
+### Phase 1：状态可读性增强 ✅ 已完成（2026-04-03）
 
 目标：先让用户一眼看懂每个 Agent 正在做什么。
 
@@ -521,6 +521,17 @@
 - 保留现有 `idle`、`walk`、`workingMotion`
 - 新增状态图标层和简易脉冲/抖动/上跳 Tween
 - 不依赖新增角色素材
+
+#### 实现详情
+
+| 状态 | 图标/效果 | 触发时机 | 实现方式 |
+| --- | --- | --- | --- |
+| thinking | 💭 脉冲浮动 | `agent:status working` 发出时 | `showThinkingIndicator`：透明度+缩放循环 Tween |
+| speaking | 角色缩放脉冲 | `showAgentBubble` 被调用时 | `playSpeakingPulse`：sprite scale 1→1.08→1 |
+| completed | ✨ 闪光粒子散开 | `agent:status idle`（从 working 切换）| `showCompletionEffect`：6 个 ✨ 粒子径向扩散渐隐 |
+| error | ❗ + 角色抖动 | `agent:status error` | `showErrorEffect`：❗图标 + sprite x 轴抖动 |
+
+状态流转：`working`(💭) → `move`(隐藏💭) → 到达工位(⚡工作) → `idle`(✨完成) 或 `error`(❗抖动)
 
 ### Phase 2：点击与任务交互增强
 
@@ -597,5 +608,5 @@
 | # | 分类 | 描述 | 备注 |
 | --- | --- | --- | --- |
 | 1 | 动画素材 | 角色坐下工位时应显示椅背遮挡，而非角色背影 | 需为每个角色制作坐姿方向帧（坐着朝上/下/左/右） |
-| 2 | 功能缺陷 | 美工设计 Agent 无法调用模型的图片生成能力 | ✅ 已修复：重构为 image_service.py 统一服务 + 优化 system_prompt |
+| 2 | 功能缺陷 | 美工设计 Agent 无法调用模型的图片生成能力 | ✅ 已修复：重构 image_service.py + 优化 system_prompt + ChatBox 支持图片/链接渲染 |
 | 3 | 场景交互 | 角色穿过房间时门没有开关交互 | 需定义门对象位置、添加门开关动画、路径经过门时触发 |
