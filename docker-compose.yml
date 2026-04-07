@@ -30,8 +30,8 @@ services:
       DATABASE_URL_SYNC: postgresql://ecom_dev:ecom_dev_pass@postgres:5432/ecom_ai_lab
     volumes:
       - uploads_data:/app/uploads
-      # 如需共享宿主机目录，取消下面的注释并替换路径：
-      # - /host/shared-data:/app/uploads
+      # 开发模式：挂载本地代码（解决 Windows Docker COPY 编码问题）
+      # - ./app:/app/app:ro
     depends_on:
       postgres:
         condition: service_healthy
