@@ -60,7 +60,7 @@ export const AgentStatusBar: React.FC = () => {
       name: a.displayName,
       color: a.color,
       role: a.role,
-      modelDisplay: 'Gemini Flash',
+      modelDisplay: '默认模型',
       active: true,
       hasPrompt: true,
       isBuiltin: a.isBuiltin,
@@ -76,7 +76,7 @@ export const AgentStatusBar: React.FC = () => {
           name: a.displayName,
           color: a.color,
           role: a.role,
-          modelDisplay: 'Gemini Flash',
+          modelDisplay: '默认模型',
           active: true,
           hasPrompt: true,
           isBuiltin: a.isBuiltin,
@@ -116,7 +116,7 @@ export const AgentStatusBar: React.FC = () => {
               role: cfg.role || agent.role,
               modelDisplay: cfg.model_name
                 ? MODEL_DISPLAY_NAMES[cfg.model_name] || cfg.model_name
-                : agent.modelDisplay,
+                : '默认模型',
               active: cfg.active ?? agent.active,
               hasPrompt: !!(cfg.system_prompt),
             };
@@ -165,7 +165,7 @@ export const AgentStatusBar: React.FC = () => {
         name: a.displayName,
         color: a.color,
         role: a.role,
-        modelDisplay: 'Gemini Flash',
+        modelDisplay: '默认模型',
         active: true,
         hasPrompt: true,
         isBuiltin: a.isBuiltin,

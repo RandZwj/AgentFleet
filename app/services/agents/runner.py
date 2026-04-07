@@ -28,7 +28,7 @@ def _get_process_message(agent_name: str, tools_key) -> str:
             if k in _PROCESS_MESSAGES:
                 return f"{agent_name}{_PROCESS_MESSAGES[k]}"
         return f"{agent_name}正在工作中…"
-    return f"{agent_name}{_PROCESS_MESSAGES.get(tools_key, '前往数据仓库查询商品信息…')}"
+    return f"{agent_name}{_PROCESS_MESSAGES.get(tools_key, '正在工作中…')}"
 
 
 def record_cost(
@@ -136,7 +136,7 @@ async def run_agent(
                 "agent_name": agent_name,
                 "content": process_msg,
                 "message_type": "process",
-                "movement": {"agent_id": agent_id, "room_id": "datacenter"},
+                "movement": {"agent_id": agent_id, "room_id": "workspace"},
             })
 
         messages.append({
@@ -269,7 +269,7 @@ async def run_agent_stream(
                     "agent_name": agent_name,
                     "content": process_msg,
                     "message_type": "process",
-                    "movement": {"agent_id": agent_id, "room_id": "datacenter"},
+                    "movement": {"agent_id": agent_id, "room_id": "workspace"},
                 },
             }
 

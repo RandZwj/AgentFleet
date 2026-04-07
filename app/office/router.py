@@ -881,18 +881,26 @@ def update_agent_config(slug: str, payload: AgentConfigPayload) -> ApiEnvelope:
 
 @router.delete("/agent-config/{slug}")
 def delete_agent_config(slug: str) -> ApiEnvelope:
-    """删除指定 Agent。内置 Agent 不允许删除。"""
+    """删除指定 Agent。仅调度员不可删除，其他 Agent（含内置）均可删除。
+
+    对于内置 Agent（仅存在于代码中、DB 无记录），通过写入 active=false 的记录来隐藏。
+    """
     from app.services.agents import BUILTIN_AGENTS
 
     trace_id = make_id("trc")
-    builtin_slugs = set(BUILTIN_AGENTS.keys()) | {"dispatcher"}
-    if slug in builtin_slugs:
+    if slug == "dispatcher":
         raise HTTPException(
             status_code=403,
-            detail="内置 Agent 不支持删除，可通过停用操作禁用该 Agent",
+            detail="调度员是系统核心，不可删除",
         )
     store = _require_store()
     deleted = store.delete_agent_by_slug(slug)
+    if not deleted and slug in BUILTIN_AGENTS:
+        store.update_agent_config_by_slug(slug, {
+            "display_name": BUILTIN_AGENTS[slug].get("display_name", slug),
+            "active": False,
+        })
+        return _envelope(trace_id=trace_id, data={"slug": slug, "deleted": True, "method": "deactivated"})
     if not deleted:
         raise HTTPException(status_code=404, detail="agent not found")
     return _envelope(trace_id=trace_id, data={"slug": slug, "deleted": True})
@@ -1602,6 +1610,21 @@ def update_agent_skill_packs(agent_id: str, payload: AgentSkillPacksUpdateReques
     office_store.update_agent(agent_id, {"metadata": metadata})
 
     return _envelope(trace_id=trace_id, data={"agent_id": agent_id, "skill_packs": payload.skill_packs})
+
+
+@router.put("/agent-config/{slug}/skill-packs")
+def update_agent_skill_packs_by_slug(slug: str, payload: AgentSkillPacksUpdateRequest) -> ApiEnvelope:
+    """按 slug 更新 Agent 技能包。如果 DB 中不存在该 Agent 则自动创建记录。"""
+    trace_id = make_id("trc")
+    store = _require_store()
+
+    from app.services.agents.tools import TOOLS_MAP
+    invalid = [k for k in payload.skill_packs if k not in TOOLS_MAP]
+    if invalid:
+        return _envelope(trace_id=trace_id, data={}, error=f"未知的技能包: {invalid}")
+
+    result = store.update_skill_packs_by_slug(slug, payload.skill_packs)
+    return _envelope(trace_id=trace_id, data={"slug": slug, "skill_packs": result})
 
 
 @router.get("/agents/{agent_id}/skill-packs")

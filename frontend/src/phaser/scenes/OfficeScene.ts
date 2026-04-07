@@ -392,7 +392,7 @@ export class OfficeScene extends Phaser.Scene {
     slug: string;
     displayName: string;
     color: string;
-    roomId: string;
+    roomId?: string;
     phaserAgentId: string;
   }) {
     if (this.agents.find((a) => a.slug === data.slug)) return;
@@ -404,12 +404,14 @@ export class OfficeScene extends Phaser.Scene {
 
     this.createAnimationsForSprite(spriteKey);
 
-    const anchor = this.findFreeAnchor(homeRoom);
-    if (!anchor) return;
+    const spawnPos = this.getRandomWalkableWorldPos();
+    const facing: Direction = (['down', 'left', 'right', 'up'] as Direction[])[
+      Phaser.Math.Between(0, 3)
+    ];
 
-    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL[anchor.facing]));
+    const sprite = this.add.sprite(0, 0, spriteKey, getFrameIndex(IDLE_ROW, IDLE_COL[facing]));
     sprite.setOrigin(0.5, 1);
-    sprite.play(`${spriteKey}-idle-${anchor.facing}`);
+    sprite.play(`${spriteKey}-idle-${facing}`);
 
     const nameTag = this.add.text(0, -100, data.displayName, {
       fontFamily: 'monospace',
@@ -421,8 +423,8 @@ export class OfficeScene extends Phaser.Scene {
     });
     nameTag.setOrigin(0.5);
 
-    const container = this.add.container(anchor.x, anchor.y, [sprite, nameTag]);
-    container.setDepth(anchor.y);
+    const container = this.add.container(spawnPos.x, spawnPos.y, [sprite, nameTag]);
+    container.setDepth(spawnPos.y);
     container.setSize(48, 96);
     container.setInteractive({ useHandCursor: true });
 
@@ -445,10 +447,9 @@ export class OfficeScene extends Phaser.Scene {
       spriteKey,
       color,
       isMoving: false,
-      facing: anchor.facing,
+      facing,
       homeRoom,
       currentRoom: homeRoom,
-      currentAnchor: anchor,
       workStatus: 'idle',
     });
 
@@ -476,6 +477,19 @@ export class OfficeScene extends Phaser.Scene {
   // ============================================================
   // 网格寻路 — Collision + Wall 双层判定
   // ============================================================
+  private getRandomWalkableWorldPos(): { x: number; y: number } {
+    const tw = this.map.tileWidth;
+    const th = this.map.tileHeight;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const tx = Phaser.Math.Between(1, this.map.width - 2);
+      const ty = Phaser.Math.Between(1, this.map.height - 2);
+      if (this.isWalkableTile(tx, ty)) {
+        return { x: tx * tw + tw / 2, y: ty * th + th };
+      }
+    }
+    return { x: this.map.widthInPixels / 2, y: this.map.heightInPixels / 2 };
+  }
+
   private isWalkableTile(tileX: number, tileY: number): boolean {
     if (tileX < 0 || tileY < 0 || tileX >= this.map.width || tileY >= this.map.height) {
       return false;

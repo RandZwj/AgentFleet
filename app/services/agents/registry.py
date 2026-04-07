@@ -25,6 +25,12 @@ def load_agent_registry() -> Dict[str, Dict[str, Any]]:
     try:
         from app.office.store import office_store
         if office_store is not None:
+            # 检查 DB 中被停用的内置 Agent，从注册表中移除
+            all_configs = office_store.get_all_agent_configs()
+            for slug, cfg in all_configs.items():
+                if slug in registry and not cfg.get("active", True):
+                    del registry[slug]
+
             db_agents = office_store.get_active_agent_definitions()
             for agent in db_agents:
                 slug = agent["slug"]
@@ -66,10 +72,11 @@ def load_agent_registry() -> Dict[str, Dict[str, Any]]:
 
 
 def get_full_registry() -> Dict[str, Dict[str, Any]]:
-    """返回完整注册表（含 dispatcher + 所有活跃自定义 Agent），供前端 API 使用。
+    """返回完整注册表（含 dispatcher + 所有活跃 Agent），供前端 API 使用。
 
     与 load_agent_registry() 不同，此函数包含所有活跃 Agent（即使没有 system_prompt），
     因为前端需要在状态栏和地图上显示它们。
+    已被停用（active=false）的 Agent 不会出现在此注册表中。
     """
     registry = load_agent_registry()
 

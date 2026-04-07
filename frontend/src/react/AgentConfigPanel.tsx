@@ -158,7 +158,10 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
       });
       if (res.ok) {
         setMessage('已保存');
+        invalidateAgentCache();
+        await loadAgentRegistry();
         EventBus.emit('agent:config-updated', { agentSlug, config });
+        EventBus.emit('agent:registry-changed', { count: -1 });
         setTimeout(() => setMessage(''), 2000);
       } else {
         setMessage('保存失败');
@@ -408,8 +411,8 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
               </div>
             </div>
 
-            {/* 危险操作区 */}
-            {!isBuiltin && (
+            {/* 危险操作区：非 dispatcher + 未激活 → 可删除 */}
+            {agentSlug !== 'dispatcher' && !config.active && (
               <div style={{
                 marginTop: 16,
                 paddingTop: 12,
@@ -436,9 +439,9 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
                 </div>
               </div>
             )}
-            {isBuiltin && !config.active && (
+            {agentSlug !== 'dispatcher' && config.active && (
               <div style={{ ...styles.hint, marginTop: 12, color: '#887766' }}>
-                内置 Agent 无法删除，可通过上方的「激活状态」来停用
+                如需删除此 Agent，请先将激活状态设为「未激活」
               </div>
             )}
           </>
@@ -670,19 +673,17 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
               onClick={async () => {
                 setSavingSkills(true);
                 try {
-                  // 找到 agent_id
-                  const listRes = await fetch('/api/v1/office/agents');
-                  const listJson = await listRes.json();
-                  const agents = listJson?.data?.agents || [];
-                  const agent = agents.find((a: { slug: string }) => a.slug === agentSlug);
-                  if (!agent) { setMessage('找不到 Agent'); return; }
-
-                  await fetch(`/api/v1/office/agents/${agent.agent_id}/skill-packs`, {
+                  const res = await fetch(`/api/v1/office/agent-config/${agentSlug}/skill-packs`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ skill_packs: agentSkillPacks }),
                   });
-                  setMessage('技能包已保存');
+                  if (res.ok) {
+                    setMessage('技能包已保存');
+                  } else {
+                    const body = await res.json().catch(() => null);
+                    setMessage(body?.error || '保存失败');
+                  }
                   setTimeout(() => setMessage(''), 2000);
                 } catch {
                   setMessage('保存失败');
@@ -698,17 +699,26 @@ export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentC
           </>
         )}
 
-        {/* 保存按钮（所有 Tab 都显示） */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 12, borderTop: '1px solid #33281a' }}>
-          <button onClick={handleSave} disabled={saving} style={styles.saveBtn}>
-            {saving ? '保存中...' : '保存配置'}
-          </button>
-          {message && (
-            <span style={{ color: message === '已保存' ? '#4ade80' : '#ff6b6b', fontSize: '13px' }}>
+        {/* 保存按钮（技能 Tab 有独立保存，不显示全局保存） */}
+        {activeTab !== 'skills' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 12, borderTop: '1px solid #33281a' }}>
+            <button onClick={handleSave} disabled={saving} style={styles.saveBtn}>
+              {saving ? '保存中...' : '保存配置'}
+            </button>
+            {message && (
+              <span style={{ color: message === '已保存' || message.includes('技能包已保存') ? '#4ade80' : '#ff6b6b', fontSize: '13px' }}>
+                {message}
+              </span>
+            )}
+          </div>
+        )}
+        {activeTab === 'skills' && message && (
+          <div style={{ marginTop: 8, textAlign: 'center' }}>
+            <span style={{ color: message.includes('已保存') ? '#4ade80' : '#ff6b6b', fontSize: '13px' }}>
               {message}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 删除确认弹窗 */}

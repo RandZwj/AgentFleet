@@ -15,13 +15,6 @@ interface Template {
   system_prompt: string;
 }
 
-const ROOMS = [
-  { id: 'workspace', label: '待命区' },
-  { id: 'showroom', label: '展示厅' },
-  { id: 'datacenter', label: '数据仓库' },
-  { id: 'meeting', label: '协作室' },
-];
-
 const PRESET_COLORS = [
   '#4ade80', '#60a5fa', '#f59e0b', '#ec4899',
   '#a78bfa', '#f97316', '#14b8a6', '#e879f9',
@@ -47,7 +40,6 @@ export const AgentCreateDialog: React.FC<Props> = ({ onClose, onCreated }) => {
   const [slugManual, setSlugManual] = useState(false);
   const [role, setRole] = useState('');
   const [color, setColor] = useState('#4ade80');
-  const [roomId, setRoomId] = useState('workspace');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -92,6 +84,15 @@ export const AgentCreateDialog: React.FC<Props> = ({ onClose, onCreated }) => {
     setError('');
 
     try {
+      // 检查 slug 是否已存在
+      const { getAgentsCached } = await import('../shared/agentRegistry');
+      const existing = getAgentsCached().find((a) => a.slug === trimmedSlug);
+      if (existing) {
+        setError(`标识 "${trimmedSlug}" 已被「${existing.displayName}」使用，请换一个`);
+        setCreating(false);
+        return;
+      }
+
       const res = await fetch(`/api/v1/office/agent-config/${trimmedSlug}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +100,6 @@ export const AgentCreateDialog: React.FC<Props> = ({ onClose, onCreated }) => {
           display_name: trimmedName,
           role: role.trim() || trimmedName,
           color,
-          room_id: roomId,
           active: true,
           model_name: '',
           temperature: 0.7,
@@ -125,7 +125,7 @@ export const AgentCreateDialog: React.FC<Props> = ({ onClose, onCreated }) => {
           slug: newAgent.slug,
           displayName: newAgent.displayName,
           color: newAgent.color,
-          roomId: newAgent.roomId || roomId,
+          roomId: newAgent.roomId || 'workspace',
           phaserAgentId: newAgent.phaserAgentId,
         });
       }
@@ -271,27 +271,6 @@ export const AgentCreateDialog: React.FC<Props> = ({ onClose, onCreated }) => {
           </div>
         </div>
 
-        {/* 所在房间 */}
-        <div style={styles.section}>
-          <label style={styles.label}>所在房间</label>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {ROOMS.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => setRoomId(r.id)}
-                style={{
-                  ...styles.roomBtn,
-                  borderColor: roomId === r.id ? '#4ade80' : '#665544',
-                  color: roomId === r.id ? '#4ade80' : '#ccbb88',
-                  background: roomId === r.id ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* 错误提示 */}
         {error && (
           <div style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: 8 }}>
@@ -401,15 +380,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontFamily: 'monospace',
     marginLeft: 'auto',
-  },
-  roomBtn: {
-    border: '1px solid #665544',
-    borderRadius: 4,
-    padding: '4px 12px',
-    cursor: 'pointer',
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    background: 'rgba(255, 255, 255, 0.05)',
   },
   templateToggle: {
     background: 'rgba(74, 222, 128, 0.08)',

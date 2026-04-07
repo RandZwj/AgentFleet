@@ -248,6 +248,11 @@ class OfficeStore:
             for row in rows:
                 cfg = row.model_config or {}
                 meta = row.extra_metadata or {}
+                skill_packs = meta.get("skill_packs", [])
+                if not skill_packs:
+                    tools_key = meta.get("tools", "")
+                    if tools_key:
+                        skill_packs = [tools_key] if isinstance(tools_key, str) else tools_key
                 result[row.slug] = {
                     # 模型配置
                     "model_name": cfg.get("model_name", ""),
@@ -260,7 +265,11 @@ class OfficeStore:
                     "role": meta.get("role", row.description or ""),
                     "system_prompt": meta.get("system_prompt", ""),
                     "color": meta.get("color", ""),
-                    "active": meta.get("active", False),
+                    "active": meta.get("active", True),
+                    "room_id": meta.get("room_id", "workspace"),
+                    "phaser_agent_id": meta.get("phaser_agent_id", ""),
+                    "skill_packs": skill_packs,
+                    "tools": meta.get("tools", ""),
                 }
             return result
 
@@ -310,6 +319,24 @@ class OfficeStore:
             session.commit()
             return self._agent_row_to_dict(row)
 
+    def update_skill_packs_by_slug(self, slug: str, skill_packs: list) -> list:
+        """按 slug 更新技能包。如果 DB 中不存在则先通过 upsert 创建。"""
+        from app.services.agents.definitions import BUILTIN_AGENTS
+        defn = BUILTIN_AGENTS.get(slug, {})
+        self.update_agent_config_by_slug(slug, {
+            "display_name": defn.get("display_name", slug),
+            "role": defn.get("role", ""),
+        })
+        with self.SessionFactory() as session:
+            row = session.query(AgentRow).filter(AgentRow.slug == slug).first()
+            if row is None:
+                return skill_packs
+            meta = row.extra_metadata or {}
+            meta["skill_packs"] = skill_packs
+            row.extra_metadata = {**meta}
+            session.commit()
+        return skill_packs
+
     def delete_agent_by_slug(self, slug: str) -> bool:
         """按 slug 删除 Agent。返回是否成功删除。"""
         with self.SessionFactory() as session:
@@ -327,7 +354,7 @@ class OfficeStore:
             result = []
             for row in rows:
                 meta = row.extra_metadata or {}
-                if not meta.get("active", False):
+                if not meta.get("active", True):
                     continue
                 cfg = row.model_config or {}
                 result.append({
