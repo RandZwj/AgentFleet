@@ -27,12 +27,17 @@ services:
     env_file:
       - .env
     environment:
-      # 容器内部通过服务名连接 PostgreSQL，覆盖 .env 中的 localhost
       DATABASE_URL_SYNC: postgresql://ecom_dev:ecom_dev_pass@postgres:5432/ecom_ai_lab
+    volumes:
+      - uploads_data:/app/uploads
+      # 如需共享宿主机目录，取消下面的注释并替换路径：
+      # - /host/shared-data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   pgdata:
+    driver: local
+  uploads_data:
     driver: local

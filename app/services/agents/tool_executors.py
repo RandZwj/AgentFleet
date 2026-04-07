@@ -1,7 +1,11 @@
 """Agent 工具执行器 — 各类工具的运行时实现。"""
 from __future__ import annotations
 
+import fnmatch
 import logging
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict
 
 from app.services.product_search import (
@@ -251,6 +255,79 @@ def execute_dashboard_tool(func_name: str, args: Dict[str, Any]) -> Any:
         return {"error": str(e)}
 
 
+def _safe_resolve(file_path: str) -> Path:
+    """将相对路径解析为 UPLOAD_DIR 下的安全绝对路径，防止路径穿越。"""
+    upload_dir = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    resolved = (upload_dir / file_path).resolve()
+    if not str(resolved).startswith(str(upload_dir)):
+        raise ValueError(f"路径越界: {file_path}")
+    return resolved
+
+
+def execute_file_tool(func_name: str, args: Dict[str, Any]) -> Any:
+    """执行文件操作工具。"""
+    try:
+        if func_name == "read_file":
+            path = _safe_resolve(args["file_path"])
+            if not path.exists():
+                return {"error": f"文件不存在: {args['file_path']}"}
+            if not path.is_file():
+                return {"error": f"不是文件: {args['file_path']}"}
+            max_size = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50")) * 1024 * 1024
+            if path.stat().st_size > max_size:
+                return {"error": f"文件过大（{path.stat().st_size} bytes），限制 {max_size} bytes"}
+            encoding = args.get("encoding", "utf-8")
+            content = path.read_text(encoding=encoding)
+            return {"file_path": args["file_path"], "content": content, "size": len(content)}
+
+        elif func_name == "write_file":
+            path = _safe_resolve(args["file_path"])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            encoding = args.get("encoding", "utf-8")
+            path.write_text(args["content"], encoding=encoding)
+            return {"file_path": args["file_path"], "size": len(args["content"]), "message": "写入成功"}
+
+        elif func_name == "list_files":
+            directory = args.get("directory", "")
+            pattern = args.get("pattern", "*")
+            dir_path = _safe_resolve(directory) if directory else Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
+            if not dir_path.exists():
+                return {"files": [], "message": f"目录不存在: {directory}"}
+            files = []
+            for item in sorted(dir_path.iterdir()):
+                if fnmatch.fnmatch(item.name, pattern):
+                    files.append({
+                        "name": item.name,
+                        "type": "directory" if item.is_dir() else "file",
+                        "size": item.stat().st_size if item.is_file() else None,
+                    })
+            return {"directory": directory or "/", "pattern": pattern, "files": files, "count": len(files)}
+
+        elif func_name == "file_info":
+            path = _safe_resolve(args["file_path"])
+            if not path.exists():
+                return {"error": f"文件不存在: {args['file_path']}"}
+            stat = path.stat()
+            return {
+                "file_path": args["file_path"],
+                "name": path.name,
+                "suffix": path.suffix,
+                "size": stat.st_size,
+                "is_file": path.is_file(),
+                "is_dir": path.is_dir(),
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            }
+
+        else:
+            return {"error": f"未知工具: {func_name}"}
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        log.error("文件工具执行失败: %s — %s", func_name, e)
+        return {"error": str(e)}
+
+
 # 工具名 → 执行器 的映射（用于多技能包合并时按 func_name 路由）
 _TOOL_NAME_TO_EXECUTOR = {
     # PRODUCT_TOOLS
@@ -275,6 +352,11 @@ _TOOL_NAME_TO_EXECUTOR = {
     "refresh_dashboard": execute_dashboard_tool,
     # DESIGNER_TOOLS
     "generate_image": execute_designer_tool,
+    # FILE_TOOLS
+    "read_file": execute_file_tool,
+    "write_file": execute_file_tool,
+    "list_files": execute_file_tool,
+    "file_info": execute_file_tool,
     # 共享工具 — 多个执行器都能处理，优先用 data_tool
     "execute_sql": execute_data_tool,
     "list_user_tables": execute_data_tool,
@@ -302,5 +384,7 @@ def execute_tool(tools_key, func_name: str, args: Dict[str, Any]) -> Any:
         return execute_designer_tool(func_name, args)
     elif tools_key == "DASHBOARD_TOOLS":
         return execute_dashboard_tool(func_name, args)
+    elif tools_key == "FILE_TOOLS":
+        return execute_file_tool(func_name, args)
     else:
         return execute_product_tool(func_name, args)

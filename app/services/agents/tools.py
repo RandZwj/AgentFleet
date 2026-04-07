@@ -606,6 +606,73 @@ DASHBOARD_TOOLS: List[Dict[str, Any]] = [
 ]
 
 
+# ============================================================
+# 文件操作工具（FILE_TOOLS）
+# ============================================================
+
+FILE_TOOLS: List[Dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "读取指定文件的内容。文件路径相对于上传目录。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "文件路径（相对于上传目录）"},
+                    "encoding": {"type": "string", "description": "文件编码", "default": "utf-8"},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "将内容写入指定文件。文件路径相对于上传目录。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "文件路径（相对于上传目录）"},
+                    "content": {"type": "string", "description": "要写入的文件内容"},
+                    "encoding": {"type": "string", "description": "文件编码", "default": "utf-8"},
+                },
+                "required": ["file_path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "列出上传目录下的文件列表，支持按通配符过滤。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "directory": {"type": "string", "description": "子目录路径（相对于上传目录），默认为根目录", "default": ""},
+                    "pattern": {"type": "string", "description": "文件名通配符（如 *.csv）", "default": "*"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "file_info",
+            "description": "获取文件的元信息（大小、类型、修改时间等）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "文件路径（相对于上传目录）"},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+]
+
+
 TOOLS_MAP: Dict[str, Dict[str, Any]] = {
     "PRODUCT_TOOLS": {
         "key": "PRODUCT_TOOLS",
@@ -641,6 +708,13 @@ TOOLS_MAP: Dict[str, Dict[str, Any]] = {
         "description": "AI 生成营销图片和设计素材",
         "icon": "🎨",
         "tools": DESIGNER_TOOLS,
+    },
+    "FILE_TOOLS": {
+        "key": "FILE_TOOLS",
+        "name": "文件操作",
+        "description": "读写文件、列出目录、获取文件信息",
+        "icon": "📁",
+        "tools": FILE_TOOLS,
     },
 }
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from threading import Lock
 from typing import Optional, Protocol, runtime_checkable
 
-from app.models import ComparisonTaskRecord, CourseRecord, TaskRecord, TrainingAttemptRecord, now_iso
+from app.models import ComparisonTaskRecord, CourseRecord, JobRecord, TaskRecord, TrainingAttemptRecord, now_iso
 
 
 @runtime_checkable
@@ -24,6 +24,11 @@ class StoreProtocol(Protocol):
     def put_comparison_task(self, task: ComparisonTaskRecord) -> None: ...
     def get_comparison_task(self, comparison_task_id: str) -> Optional[ComparisonTaskRecord]: ...
 
+    def put_job(self, job: JobRecord) -> None: ...
+    def get_job(self, job_id: str) -> Optional[JobRecord]: ...
+    def update_job(self, job_id: str, **kwargs) -> None: ...
+    def list_jobs(self, status: Optional[str] = None, page: int = 1, page_size: int = 20) -> dict: ...
+
 
 class InMemoryStore:
     def __init__(self) -> None:
@@ -32,6 +37,7 @@ class InMemoryStore:
         self.tasks: dict[str, TaskRecord] = {}
         self.training_attempts: dict[str, TrainingAttemptRecord] = {}
         self.comparison_tasks: dict[str, ComparisonTaskRecord] = {}
+        self.jobs: dict[str, JobRecord] = {}
 
     def put_course(self, course: CourseRecord) -> None:
         with self._lock:
@@ -80,6 +86,36 @@ class InMemoryStore:
     def get_comparison_task(self, comparison_task_id: str) -> Optional[ComparisonTaskRecord]:
         with self._lock:
             return self.comparison_tasks.get(comparison_task_id)
+
+    # ---- Job ----
+
+    def put_job(self, job: JobRecord) -> None:
+        with self._lock:
+            self.jobs[job.job_id] = job
+
+    def get_job(self, job_id: str) -> Optional[JobRecord]:
+        with self._lock:
+            return self.jobs.get(job_id)
+
+    def update_job(self, job_id: str, **kwargs) -> None:
+        with self._lock:
+            job = self.jobs.get(job_id)
+            if job is None:
+                raise KeyError(f"job not found: {job_id}")
+            job_data = job.model_dump()
+            job_data.update(kwargs)
+            job_data["updated_at"] = now_iso()
+            self.jobs[job_id] = JobRecord(**job_data)
+
+    def list_jobs(self, status: Optional[str] = None, page: int = 1, page_size: int = 20) -> dict:
+        with self._lock:
+            items = list(self.jobs.values())
+            if status:
+                items = [j for j in items if j.status == status]
+            items.sort(key=lambda j: j.created_at, reverse=True)
+            total = len(items)
+            start = (page - 1) * page_size
+            return {"jobs": items[start:start + page_size], "total": total}
 
 
 def _create_store() -> StoreProtocol:

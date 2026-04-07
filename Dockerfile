@@ -18,7 +18,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt python-dotenv \
 
 # 复制应用代码
 COPY app/ app/
-RUN find /usr -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true \
+RUN mkdir -p /app/uploads \
+    && find /usr -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true \
     && find /usr -name "*.pyc" -delete 2>/dev/null; true
 
 EXPOSE 8001

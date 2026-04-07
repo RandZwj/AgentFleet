@@ -21,12 +21,14 @@ from app.models import (
     TrainingAttemptRecord,
     make_id,
 )
+from app.api.jobs import router as jobs_router
 from app.office.router import router as office_router
 from app.services.orchestrator import orchestrator
 from app.store import store
 
 app = FastAPI(title="Ecommerce AI Lab Prototype", version="0.1.0")
 app.include_router(office_router, prefix="/api/v1/office", tags=["AgentsOffice"])
+app.include_router(jobs_router, prefix="/api/v1/jobs", tags=["Jobs"])
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"

@@ -314,7 +314,36 @@ CREATE TABLE IF NOT EXISTS dashboards (
 COMMENT ON TABLE dashboards IS '数据大屏配置';
 
 -- ============================================================
--- 16. 修改 tasks 表：增加 agent_id 和 agent_slug 列
+-- 16. Job API 任务表
+-- ============================================================
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id            TEXT PRIMARY KEY,
+    status            TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled')),
+    task              TEXT NOT NULL,
+    context           JSONB,
+    agent_slug        TEXT,
+    callback_url      TEXT,
+    priority          TEXT NOT NULL DEFAULT 'normal',
+    timeout_seconds   INTEGER NOT NULL DEFAULT 300,
+    dispatched_agents JSONB DEFAULT '[]',
+    result            JSONB,
+    summary           TEXT,
+    messages          JSONB DEFAULT '[]',
+    error             TEXT,
+    usage             JSONB,
+    duration_ms       INTEGER,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status);
+CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs (created_at DESC);
+
+COMMENT ON TABLE jobs IS '外部系统提交的异步任务，由 Dispatcher 调度 Agent 执行';
+
+-- ============================================================
+-- 17. 修改 tasks 表：增加 agent_id 和 agent_slug 列
 -- ============================================================
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS agent_id TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS agent_slug TEXT;

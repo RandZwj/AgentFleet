@@ -37,6 +37,12 @@ class Settings:
     # ---------- 数据源 ----------
     datasource_mode: str = os.getenv("DATASOURCE_MODE", "mock").strip().lower()
 
+    # ---------- Job API ----------
+    job_default_timeout: int = int(os.getenv("JOB_DEFAULT_TIMEOUT", "300"))
+    job_callback_timeout: float = float(os.getenv("JOB_CALLBACK_TIMEOUT", "10"))
+    upload_dir: str = os.getenv("UPLOAD_DIR", "uploads").strip()
+    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+
     # ---------- OpenClaw（已弃用，保留向后兼容） ----------
     openclaw_mode: str = os.getenv("OPENCLAW_MODE", "mock").strip().lower()
     openclaw_remote_base_url: str = os.getenv("OPENCLAW_REMOTE_BASE_URL", "http://127.0.0.1:9001").strip()

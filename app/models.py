@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 TaskStatus = Literal["pending", "running", "succeeded", "failed"]
+JobStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
 
 
 def now_iso() -> str:
@@ -105,6 +106,42 @@ class ApiEnvelope(BaseModel):
     request_id: str
     data: dict[str, Any]
     error: Optional[str] = None
+
+
+# ================================================================
+# Job API（外部系统集成）
+# ================================================================
+
+
+class JobCreateRequest(BaseModel):
+    """外部系统提交任务的请求体。"""
+    task: str = Field(description="任务描述（自然语言）")
+    context: Optional[dict[str, Any]] = Field(default=None, description="附加上下文（文件引用、业务参数等）")
+    agent_slug: Optional[str] = Field(default=None, description="指定 Agent slug（跳过调度者直接执行）")
+    callback_url: Optional[str] = Field(default=None, description="完成后回调 URL")
+    priority: str = Field(default="normal", description="优先级：normal / high")
+    timeout_seconds: int = Field(default=300, ge=10, le=3600, description="超时时间（秒）")
+
+
+class JobRecord(BaseModel):
+    """Job 执行记录。"""
+    job_id: str
+    status: JobStatus = "pending"
+    task: str
+    context: Optional[dict[str, Any]] = None
+    agent_slug: Optional[str] = None
+    callback_url: Optional[str] = None
+    priority: str = "normal"
+    timeout_seconds: int = 300
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+    dispatched_agents: list[str] = Field(default_factory=list)
+    result: Optional[dict[str, Any]] = None
+    summary: Optional[str] = None
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    error: Optional[str] = None
+    usage: Optional[dict[str, Any]] = None
+    duration_ms: Optional[int] = None
 
 
 # ================================================================

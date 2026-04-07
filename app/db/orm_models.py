@@ -272,6 +272,34 @@ class DashboardRow(Base):
     )
 
 
+# ---- jobs (Job API) ----
+
+class JobRow(Base):
+    __tablename__ = "jobs"
+
+    job_id = Column(Text, primary_key=True)
+    status = Column(Text, nullable=False, default="pending")
+    task = Column(Text, nullable=False)
+    context = Column(JSONB)
+    agent_slug = Column(Text)
+    callback_url = Column(Text)
+    priority = Column(Text, nullable=False, default="normal")
+    timeout_seconds = Column(Integer, nullable=False, default=300)
+    dispatched_agents = Column(JSONB, server_default="[]")
+    result = Column(JSONB)
+    summary = Column(Text)
+    messages = Column(JSONB, server_default="[]")
+    error = Column(Text)
+    usage = Column(JSONB)
+    duration_ms = Column(Integer)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled')"),
+    )
+
+
 class ModelPricingRow(Base):
     __tablename__ = "model_pricing"
 

@@ -5,15 +5,19 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.db.engine import build_session_factory
+from sqlalchemy import desc
+
 from app.db.orm_models import (
     ComparisonTaskRow,
     CourseRow,
+    JobRow,
     TaskRow,
     TrainingAttemptRow,
 )
 from app.models import (
     ComparisonTaskRecord,
     CourseRecord,
+    JobRecord,
     TaskRecord,
     TrainingAttemptRecord,
     now_iso,
@@ -174,3 +178,79 @@ class PostgresStore:
                 targets=row.targets,
                 created_at=_dt_to_iso(row.created_at),
             )
+
+    # ---- Job ----
+
+    def put_job(self, job: JobRecord) -> None:
+        with self.Session() as session:
+            row = JobRow(
+                job_id=job.job_id,
+                status=job.status,
+                task=job.task,
+                context=job.context,
+                agent_slug=job.agent_slug,
+                callback_url=job.callback_url,
+                priority=job.priority,
+                timeout_seconds=job.timeout_seconds,
+                dispatched_agents=job.dispatched_agents,
+                result=job.result,
+                summary=job.summary,
+                messages=job.messages,
+                error=job.error,
+                usage=job.usage,
+                duration_ms=job.duration_ms,
+            )
+            session.merge(row)
+            session.commit()
+
+    def get_job(self, job_id: str) -> Optional[JobRecord]:
+        with self.Session() as session:
+            row = session.get(JobRow, job_id)
+            if row is None:
+                return None
+            return self._row_to_job(row)
+
+    def update_job(self, job_id: str, **kwargs) -> None:
+        with self.Session() as session:
+            row = session.get(JobRow, job_id)
+            if row is None:
+                raise KeyError(f"job not found: {job_id}")
+            for key, value in kwargs.items():
+                setattr(row, key, value)
+            session.commit()
+
+    def list_jobs(self, status: Optional[str] = None, page: int = 1, page_size: int = 20) -> dict:
+        with self.Session() as session:
+            query = session.query(JobRow)
+            if status:
+                query = query.filter(JobRow.status == status)
+            total = query.count()
+            rows = (
+                query.order_by(desc(JobRow.created_at))
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+                .all()
+            )
+            return {"jobs": [self._row_to_job(r) for r in rows], "total": total}
+
+    @staticmethod
+    def _row_to_job(row: JobRow) -> JobRecord:
+        return JobRecord(
+            job_id=row.job_id,
+            status=row.status,
+            task=row.task,
+            context=row.context,
+            agent_slug=row.agent_slug,
+            callback_url=row.callback_url,
+            priority=row.priority,
+            timeout_seconds=row.timeout_seconds,
+            dispatched_agents=row.dispatched_agents or [],
+            result=row.result,
+            summary=row.summary,
+            messages=row.messages or [],
+            error=row.error,
+            usage=row.usage,
+            duration_ms=row.duration_ms,
+            created_at=_dt_to_iso(row.created_at),
+            updated_at=_dt_to_iso(row.updated_at),
+        )
