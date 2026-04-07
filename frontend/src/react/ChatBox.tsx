@@ -19,6 +19,7 @@ interface ChatMessage {
   agentName?: string;
   content: string;
   messageType?: string;
+  isSummary?: boolean;
   timestamp: Date;
   skillData?: {
     sessionId?: string;
@@ -628,6 +629,7 @@ export const ChatBox: React.FC = () => {
               agentName: d.agent_name,
               content: d.content,
               messageType: d.message_type,
+              isSummary: d.message_type === 'summary',
             });
             if (d.agent_slug) {
               EventBus.emit('chat:agent-bubble', {
@@ -1271,6 +1273,13 @@ export const ChatBox: React.FC = () => {
                       </div>
                     )}
                   </div>
+                ) : msg.isSummary ? (
+                  <div>
+                    <div style={styles.summaryLabel}>📋 调度员总结</div>
+                    <div style={styles.summaryBubble}>
+                      {parseMarkdownContent(msg.content)}
+                    </div>
+                  </div>
                 ) : (
                   <div>
                     <div style={{ ...styles.senderLabel, color: getAgentColor(msg.agentSlug) }}>
@@ -1559,6 +1568,25 @@ const styles: Record<string, React.CSSProperties> = {
   agentBubble: {
     background: 'rgba(255, 255, 255, 0.06)',
     border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: '4px',
+    padding: '10px 12px',
+    fontSize: '14px',
+    lineHeight: '1.6',
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'break-word' as const,
+    wordBreak: 'break-word' as const,
+    overflow: 'hidden',
+  },
+  summaryLabel: {
+    fontSize: '12px',
+    color: '#ffd700',
+    marginBottom: 3,
+    fontWeight: 'bold',
+  },
+  summaryBubble: {
+    background: 'rgba(255, 215, 0, 0.06)',
+    border: '1px solid rgba(255, 215, 0, 0.3)',
+    borderLeft: '3px solid #ffd700',
     borderRadius: '4px',
     padding: '10px 12px',
     fontSize: '14px',

@@ -140,13 +140,25 @@ def build_dispatcher_prompt(registry: Dict[str, Dict[str, Any]]) -> str:
 - 分析用户的意图，决定交给谁处理
 - 根据每个 Agent 的职责描述选择最合适的 Agent
 - 当用户需求明确匹配某个 Skill 的能力时（如比价、跨平台对比），优先调用 trigger_skill
-- 如果需要多个 Agent 协作 → 说明协作方式
 - 如果用户在闲聊/打招呼 → 你直接回复，不需要分配
+
+## 单 Agent vs 多 Agent 判断
+
+- 只需一个 Agent 即可完成 → 调用 assign_task
+- 需要多个 Agent 协作 → 调用 dispatch_plan，在 tasks 中列出所有子任务
+
+## dispatch_plan 使用规则
+
+当使用 dispatch_plan 时，你需要判断子任务之间的依赖关系：
+- **可并行**：子任务之间无数据依赖，设置 depends_on 为空数组。例如"写文案"和"设计海报"可以同时进行
+- **必须串行**：后续任务需要前置任务的输出，设置 depends_on 包含前置 task_id。例如"先查商品数据(task_1)，再基于数据写报告(task_2, depends_on: ['task_1'])"
+- **混合**：部分并行 + 部分串行。例如"文案(task_1)和海报(task_2)并行，运营策划(task_3)等两者完成后再做"
 
 ## 输出格式
 
 - 需要触发 Skill → 调用 trigger_skill
-- 需要分配给 Agent → 调用 assign_task
+- 单 Agent 任务 → 调用 assign_task
+- 多 Agent 协作 → 调用 dispatch_plan
 - 闲聊 → 直接回复文字"""
 
 
@@ -159,7 +171,7 @@ def build_dispatcher_tools(registry: Dict[str, Dict[str, Any]]) -> List[Dict]:
             "type": "function",
             "function": {
                 "name": "assign_task",
-                "description": "将用户任务分配给指定 Agent 执行",
+                "description": "将用户任务分配给单个 Agent 执行（仅需一个 Agent 时使用）",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -172,12 +184,53 @@ def build_dispatcher_tools(registry: Dict[str, Dict[str, Any]]) -> List[Dict]:
                             "type": "string",
                             "description": "简要说明分配给 Agent 的任务内容",
                         },
-                        "needs_collaboration": {
-                            "type": "boolean",
-                            "description": "是否需要多 Agent 协作",
-                        },
                     },
                     "required": ["agent_slug", "task_summary"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "dispatch_plan",
+                "description": "将复杂任务拆解为多个子任务分配给不同 Agent。无依赖的任务会并行执行，有依赖的任务等前置完成后再执行。需要多个 Agent 协作时使用此工具。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "整体任务概述，用于向用户展示协作计划",
+                        },
+                        "tasks": {
+                            "type": "array",
+                            "description": "子任务列表",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "task_id": {
+                                        "type": "string",
+                                        "description": "子任务唯一标识，如 task_1, task_2",
+                                    },
+                                    "agent_slug": {
+                                        "type": "string",
+                                        "enum": agent_slugs,
+                                        "description": "执行此子任务的 Agent",
+                                    },
+                                    "task_summary": {
+                                        "type": "string",
+                                        "description": "此子任务的具体内容",
+                                    },
+                                    "depends_on": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "依赖的前置 task_id 列表。空数组表示无依赖，可立即执行",
+                                    },
+                                },
+                                "required": ["task_id", "agent_slug", "task_summary", "depends_on"],
+                            },
+                        },
+                    },
+                    "required": ["summary", "tasks"],
                 },
             },
         },
