@@ -48,7 +48,7 @@ interface SkillPack {
   tool_count: number;
 }
 
-export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentColor, isBuiltin, onClose }) => {
+export const AgentConfigPanel: React.FC<Props> = ({ agentSlug, agentName, agentColor, isBuiltin: _isBuiltin, onClose }) => {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus>({});
   const [config, setConfig] = useState<AgentConfig>({

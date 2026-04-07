@@ -278,8 +278,8 @@ class OfficeStore:
     ) -> Optional[Dict[str, Any]]:
         """按 slug 更新 Agent 的完整配置（模型 + 身份/行为）。如果不存在则自动创建。"""
         from app.models import make_id
+        from sqlalchemy.orm.attributes import flag_modified
 
-        # 分离模型配置和身份配置
         model_fields = {"model_name", "temperature", "max_tokens", "api_base", "api_key"}
         identity_fields = {"display_name", "role", "system_prompt", "color", "active", "room_id"}
 
@@ -301,17 +301,16 @@ class OfficeStore:
                 )
                 session.add(row)
             else:
-                # 合并更新 model_config
                 if model_cfg:
-                    existing_mc = row.model_config or {}
-                    existing_mc.update(model_cfg)
-                    row.model_config = existing_mc
-                # 合并更新 extra_metadata（身份信息）
+                    new_mc = dict(row.model_config or {})
+                    new_mc.update(model_cfg)
+                    row.model_config = new_mc
+                    flag_modified(row, "model_config")
                 if identity_cfg:
-                    existing_meta = row.extra_metadata or {}
-                    existing_meta.update(identity_cfg)
-                    row.extra_metadata = existing_meta
-                    # 同步 name 和 description 列
+                    new_meta = dict(row.extra_metadata or {})
+                    new_meta.update(identity_cfg)
+                    row.extra_metadata = new_meta
+                    flag_modified(row, "extra_metadata")
                     if "display_name" in identity_cfg:
                         row.name = identity_cfg["display_name"]
                     if "role" in identity_cfg:
@@ -322,6 +321,8 @@ class OfficeStore:
     def update_skill_packs_by_slug(self, slug: str, skill_packs: list) -> list:
         """按 slug 更新技能包。如果 DB 中不存在则先通过 upsert 创建。"""
         from app.services.agents.definitions import BUILTIN_AGENTS
+        from sqlalchemy.orm.attributes import flag_modified
+
         defn = BUILTIN_AGENTS.get(slug, {})
         self.update_agent_config_by_slug(slug, {
             "display_name": defn.get("display_name", slug),
@@ -331,9 +332,10 @@ class OfficeStore:
             row = session.query(AgentRow).filter(AgentRow.slug == slug).first()
             if row is None:
                 return skill_packs
-            meta = row.extra_metadata or {}
+            meta = dict(row.extra_metadata or {})
             meta["skill_packs"] = skill_packs
-            row.extra_metadata = {**meta}
+            row.extra_metadata = meta
+            flag_modified(row, "extra_metadata")
             session.commit()
         return skill_packs
 
