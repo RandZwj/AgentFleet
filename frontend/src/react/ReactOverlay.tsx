@@ -8,6 +8,7 @@ import { ChatBox } from './ChatBox';
 // import { CollectorPanel } from './CollectorPanel';  // 采集功能暂停，改为接口导入模式
 import { DatabasePanel } from './DatabasePanel';
 
+import { GlobalEventStream } from './GlobalEventStream';
 import { ScenarioTemplatePanel } from './ScenarioTemplatePanel';
 const DashboardView = lazy(() => import('./DashboardView'));
 
@@ -191,6 +192,9 @@ export const ReactOverlay: React.FC = () => {
 
   return (
     <>
+      {/* 全局 SSE 事件订阅（Job API 动画联动） */}
+      <GlobalEventStream />
+
       {/* 顶部状态栏 */}
       {sceneReady && (
         <div style={{

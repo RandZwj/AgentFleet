@@ -1242,6 +1242,35 @@ def list_events(
     return _envelope(trace_id=trace_id, data={"events": events, "total": len(events)})
 
 
+@router.get("/events/stream")
+async def events_stream():
+    """全局 SSE 事件流 — 实时推送 Agent 活动事件（走位、状态变更等）。"""
+    from app.services.event_broadcast import broadcast
+
+    queue = broadcast.subscribe()
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    event_type = event.get("event", "message")
+                    event_data = event.get("data", {})
+                    yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"event: heartbeat\ndata: {json.dumps({'ts': make_id('hb')})}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            broadcast.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 # ================================================================
 # 文件上传 API（数据工程师用）
 # ================================================================

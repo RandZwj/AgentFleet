@@ -84,16 +84,16 @@ async def _execute(
     context: Optional[Dict[str, Any]],
     agent_slug: Optional[str],
 ) -> Dict[str, Any]:
-    """根据是否指定 agent_slug 选择调度或直接执行。"""
-    from app.services.agents.dispatcher import dispatch
+    """根据是否指定 agent_slug 选择调度或直接执行，同时广播事件给前端动画。"""
+    from app.services.agents.dispatcher import dispatch_stream
     from app.services.agents.registry import load_agent_registry
-    from app.services.agents.runner import run_agent
+    from app.services.agents.runner import run_agent_stream
+    from app.services.event_broadcast import broadcast
 
     user_message = task
     if context:
         user_message += f"\n\n附加上下文：{context}"
 
-    # 加载 per-agent 模型配置
     agent_models: Dict[str, Dict[str, str]] = {}
     try:
         from app.office.store import office_store
@@ -101,6 +101,8 @@ async def _execute(
             agent_models = office_store.get_agent_model_configs()
     except Exception:
         pass
+
+    result_messages: list[Dict[str, Any]] = []
 
     if agent_slug:
         registry = load_agent_registry()
@@ -124,7 +126,7 @@ async def _execute(
             target_api_key = ac.get("api_key") or None
         target_model = target_model or agent_defn.get("model_name")
 
-        return await run_agent(
+        async for event in run_agent_stream(
             agent_slug=agent_slug,
             agent_defn=agent_defn,
             user_message=user_message,
@@ -132,16 +134,28 @@ async def _execute(
             model=target_model,
             api_base=target_api_base,
             api_key=target_api_key,
-        )
+        ):
+            event_type = event.get("event", "message")
+            event_data = event.get("data", {})
+            await broadcast.publish(event_type, event_data, source="job")
+            if event_type in ("message", "process", "routing"):
+                result_messages.append(event_data)
     else:
         dispatcher_cfg = agent_models.get("dispatcher", {})
         dispatcher_model = dispatcher_cfg.get("model_name") if dispatcher_cfg else None
 
-        return await dispatch(
+        async for event in dispatch_stream(
             user_message=user_message,
             dispatcher_model=dispatcher_model,
             agent_models=agent_models,
-        )
+        ):
+            event_type = event.get("event", "message")
+            event_data = event.get("data", {})
+            await broadcast.publish(event_type, event_data, source="job")
+            if event_type in ("message", "process", "routing"):
+                result_messages.append(event_data)
+
+    return {"messages": result_messages}
 
 
 def _extract_dispatched_agents(result: Dict[str, Any]) -> list[str]:

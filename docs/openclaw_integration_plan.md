@@ -512,7 +512,46 @@ resp = httpx.post(f"{BASE_URL}/api/v1/jobs", json={
 
 ---
 
-## 8. 注意事项
+## 8. Job 与 Web UI 动画联动
+
+通过全局 SSE 事件广播，Job API 提交的任务执行时也会在 Web UI 中触发 Phaser 动画效果。
+
+### 架构
+
+```
+Job 执行 (dispatch_stream)
+    │
+    ▼
+EventBroadcast (内存广播队列)
+    │
+    ├── SSE 端点: GET /api/v1/office/events/stream
+    │
+    ▼
+前端 GlobalEventStream (EventSource 订阅)
+    │
+    ▼
+EventBus.emit → OfficeScene Phaser 动画
+```
+
+### 关键文件
+
+| 文件 | 说明 |
+|------|------|
+| `app/services/event_broadcast.py` | 内存事件广播器（asyncio.Queue 发布/订阅） |
+| `app/office/router.py` | `GET /events/stream` SSE 端点 |
+| `app/services/job_executor.py` | 执行时用 `dispatch_stream` 并广播事件 |
+| `frontend/src/react/GlobalEventStream.tsx` | 全局 SSE 订阅组件 |
+| `frontend/src/react/ReactOverlay.tsx` | 挂载 GlobalEventStream |
+
+### 事件去重
+
+- 广播事件中携带 `_source: "job"` 标记
+- `GlobalEventStream` 仅处理 `_source === "job"` 的事件
+- ChatBox 的 SSE 不受影响，避免重复动画
+
+---
+
+## 9. 注意事项
 
 - **超时处理**：`job_executor` 应使用 `asyncio.wait_for` 包裹 dispatch 调用，超时后更新 JobRecord 状态为 failed
 - **并发控制**：可通过 `asyncio.Semaphore` 限制同时执行的 job 数量，防止资源耗尽
